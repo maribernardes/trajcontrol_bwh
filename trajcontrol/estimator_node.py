@@ -12,6 +12,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from cv_bridge.core import CvBridge
 from numpy import linalg
+from ros2_igtl_bridge.msg import Transform
 
 class EstimatorNode(Node):
 
@@ -27,7 +28,8 @@ class EstimatorNode(Node):
 
         #Syncronized topics (Stage and Sensor nodes)
         self.subscription_stage = message_filters.Subscriber(self, PoseStamped, '/stage/state/needle_pose')
-        self.subscription_sensor = message_filters.Subscriber(self, PoseArray, '/needle/state/shape')
+        self.subscription_sensor = message_filters.Subscriber(self, Transform, 'IGTL_TRANSFORM_IN')
+        #self.subscription_sensor = message_filters.Subscriber(self, PoseArray, '/needle/state/shape')
         self.timeSync = message_filters.ApproximateTimeSynchronizer([self.subscription_stage, self.subscription_sensor], 10, 0.1)
         self.timeSync.registerCallback(self.sync_callback)
 
@@ -65,7 +67,7 @@ class EstimatorNode(Node):
 
         self.get_logger().info('Listening UI - Skin entry point: x=%f, y=%f, z=%f in %s frame'  % (entry_point.x, entry_point.y, \
             entry_point.z, msg.header.frame_id))
-    
+
     # Get current needle_pose from Stage node
     # Perform estimator input X ("Prediction")
     # X = [x_stage, y_needle_depth, z_stage, q_needle_roll]
@@ -86,21 +88,13 @@ class EstimatorNode(Node):
         # TODO: Transform X from needle to stage frame
         ##########################################
 
-        # Get needle shape from PoseArray
-        shape = msg_sensor.poses
-        TZ = msg_sensor.header.stamp
-        
-        # From shape, get measured Z
-        N = len(shape)
-        tip = needle2stage(np.array([shape[N-1].position.x, shape[N-1].position.y, shape[N-1].position.z]))     #tip
-        if (N==1):
-            q = [0, 0, math.cos(math.pi/4), math.cos(math.pi/4)]
-        else:
-            ptip = needle2stage(np.array([shape[N-2].position.x, shape[N-2].position.y, shape[N-2].position.z])) #prior to tip
-            forw = tip - ptip
-            q = upforw2quat([0, 0, 1], forw)
+        # Get needle shape from Aurora IGTL
+        name = msg_sensor.name
+        if name=="NeedleToTracker": # Name is adjusted in Plus .xml
+            TZ = msg_sensor.header.stamp
+            Z = np.array([[msg_sensor.transform.translation.x, msg_sensor.transform.translation.y, msg_sensor.transform.translation.z, \
+                msg_sensor.transform.rotation.w, msg_sensor.transform.rotation.x, msg_sensor.transform.rotation.y, msg_sensor.transform.rotation.z]]).T
 
-        Z = np.array([[tip[0], tip[1], tip[2], q[0], q[1], q[2], q[3]]]).T  #use np.array([[ ]]).T to get column vector
 
         deltaTX = ((TX.sec*1e9 + TX.nanosec) - (self.TXant.sec*1e9 + self.TXant.nanosec))*1e-9
         deltaTZ = ((TZ.sec*1e9 + TZ.nanosec) - (self.TZant.sec*1e9 + self.TZant.nanosec))*1e-9
