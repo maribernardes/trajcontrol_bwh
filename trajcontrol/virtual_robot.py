@@ -63,9 +63,9 @@ class VirtualRobot(Node):
         msg.pose.orientation = Quaternion(x=float(Z[3]), y=float(Z[4]), z=float(Z[5]), w=float(Z[6]))
 
         self.publisher_needle_pose.publish(msg)
-        #self.get_logger().info('Publish - Needle pose %i: x=%f, y=%f, z=%f, q=[%f, %f, %f, %f] in %s frame'  % (self.i, msg.pose.position.x, \
-        #    msg.pose.position.y, msg.pose.position.z,  msg.pose.orientation.x, \
-        #    msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w, msg.header.frame_id))
+        self.get_logger().info('Publish - Needle pose %i: x=%f, y=%f, z=%f, q=[%f, %f, %f, %f] in %s frame'  % (self.i, msg.pose.position.x, \
+            msg.pose.position.y, msg.pose.position.z,  msg.pose.orientation.x, \
+            msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w, msg.header.frame_id))
         self.i += 1
 
     # Destroy de action server
