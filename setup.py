@@ -25,10 +25,13 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'virtual_sensor = trajcontrol.virtual_sensor:main',
             'virtual_robot = trajcontrol.virtual_robot:main',
             'virtual_UI = trajcontrol.virtual_UI:main',
+            'smart_template = trajcontrol.smart_template:main',
             'estimator_node = trajcontrol.estimator_node:main',
             'controller_node = trajcontrol.controller_node:main',
+            'save_file = trajcontrol.save_file:main',
         ],
     },
 )

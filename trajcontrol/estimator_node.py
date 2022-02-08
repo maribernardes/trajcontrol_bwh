@@ -26,12 +26,13 @@ class EstimatorNode(Node):
         self.subscription_UI = self.create_subscription(PoseStamped, '/subject/state/skin_entry', self.entry_point_callback, 10)
         self.subscription_UI  # prevent unused variable warning
 
-        #Syncronized topics (Stage and Sensor nodes)
-        self.subscription_stage = message_filters.Subscriber(self, PoseStamped, '/stage/state/needle_pose')
-        self.subscription_sensor = message_filters.Subscriber(self, Transform, 'IGTL_TRANSFORM_IN')
-        #self.subscription_sensor = message_filters.Subscriber(self, PoseArray, '/needle/state/shape')
-        self.timeSync = message_filters.ApproximateTimeSynchronizer([self.subscription_stage, self.subscription_sensor], 10, 0.1)
-        self.timeSync.registerCallback(self.sync_callback)
+        #Topics from robot node
+        self.subscription_robot = self.create_subscription(PoseStamped, '/stage/state/needle_pose', self.robot_callback, 10)
+        self.subscription_robot # prevent unused variable warning
+
+        #Topics from Aurora sensor node
+        self.subscription_sensor = self.create_subscription(Transform, 'IGTL_TRANSFORM_IN', self.aurora_callback, 10)
+        self.subscription_sensor # prevent unused variable warning
 
         #Published topics
         self.publisher_jacobian = self.create_publisher(Image, '/needle/state/jacobian', 10)
@@ -42,7 +43,7 @@ class EstimatorNode(Node):
         np.set_printoptions(formatter={'float': lambda x: "{0:0.4f}".format(x)})
 
         # Initialize Jacobian with estimated values from previous experiments
-        # (Alternative: initialize with values from first two sets of sensor and stage data)
+        # (Alternative: initialize with values from first two sets of sensor and robot data)
         self.J = np.array([(-0.3482, 0.1089, 0.0893,-0.1670, 0.1967, 0.0913, 0.1103),
                   ( 0.3594, 0.1332,-0.2593, 0.1975, 0.7322, 0.7989, 0.0794),
                   (-0.1714, 0.0723, 0.1597, 0.8766, 0.0610,-0.4968, 0.2415),
@@ -56,53 +57,66 @@ class EstimatorNode(Node):
         self.TXant = self.get_clock().now().to_msg()
         self.TZant = self.get_clock().now().to_msg()
 
+        self.Z = np.zeros((7,1)) #Store last aurora measurement
         self.i = 0
         
     # Get current entry point from UI node
     def entry_point_callback(self, msg):
-        ##########################################
-        # TODO: Define transform from needle to stage frame
-        ##########################################
         entry_point = msg.pose.position
+
+        ##########################################
+        # TODO: Transform entry_point from UI to robot frame
+        ##########################################
 
         self.get_logger().info('Listening UI - Skin entry point: x=%f, y=%f, z=%f in %s frame'  % (entry_point.x, entry_point.y, \
             entry_point.z, msg.header.frame_id))
 
-    # Get current needle_pose from Stage node
-    # Perform estimator input X ("Prediction")
-    # X = [x_stage, y_needle_depth, z_stage, q_needle_roll]
-    # Get current needle shape from FBG sensor measurements
-    # Perform estimator "correction"
+    # Get current needle tip from Aurora sensor measurements
     # Z = [x_tip, y_tip, z_tip, q_tip] (Obs: for q, roll=pitch)
-    def sync_callback(self, msg_stage, msg_sensor):
-
-        # Get needle pose from PoseStamped
-        needle = msg_stage.pose
-        TX = msg_stage.header.stamp
-        
-        # From needle, get input X
-        X = np.array([[needle.position.x, needle.position.y, needle.position.z, needle.orientation.x, \
-            needle.orientation.y, needle.orientation.z, needle.orientation.w]]).T
-
-        ##########################################
-        # TODO: Transform X from needle to stage frame
-        ##########################################
-
+    def aurora_callback(self, msg_sensor):
         # Get needle shape from Aurora IGTL
-        name = msg_sensor.name
+        name = msg_sensor.name      
         if name=="NeedleToTracker": # Name is adjusted in Plus .xml
-            TZ = msg_sensor.header.stamp
-            Z = np.array([[msg_sensor.transform.translation.x, msg_sensor.transform.translation.y, msg_sensor.transform.translation.z, \
-                msg_sensor.transform.rotation.w, msg_sensor.transform.rotation.x, msg_sensor.transform.rotation.y, msg_sensor.transform.rotation.z]]).T
+            # No timestamp from Plus
+            #TZ = msg_sensor.header.stamp 
+            #deltaTZ = ((TZ.sec*1e9 + TZ.nanosec) - (self.TZant.sec*1e9 + self.TZant.nanosec))*1e-9
 
+            ##########################################
+            # TODO: Transform Z from Aurora to robot frame
+            ##########################################
+
+            self.Z = np.array([[msg_sensor.transform.translation.x, msg_sensor.transform.translation.y, msg_sensor.transform.translation.z, \
+                msg_sensor.transform.rotation.w, msg_sensor.transform.rotation.x, msg_sensor.transform.rotation.y, msg_sensor.transform.rotation.z]]).T
+            self.get_logger().info('Sample #%i: Z = %s in Aurora frame' % (self.i, self.Z.T))
+
+    # Get current needle_pose from robot node
+    # Get estimator input X ("Prediction")
+    # X = [x_robot, y_needle_depth, z_robot, q_needle_roll]
+    # Perform estimator "correction" from last Z (aurora)
+    def robot_callback(self, msg_robot):
+
+        # Get pose from PoseStamped
+        robot = msg_robot.pose
+        TX = msg_robot.header.stamp
+        
+        # From robot, get input X
+        X = np.array([[robot.position.x, robot.position.y, robot.position.z, robot.orientation.w, \
+            robot.orientation.x, robot.orientation.y, robot.orientation.z]]).T
+
+        ##########################################
+        # TODO: Transform X from needle to robot frame
+        ##########################################
 
         deltaTX = ((TX.sec*1e9 + TX.nanosec) - (self.TXant.sec*1e9 + self.TXant.nanosec))*1e-9
-        deltaTZ = ((TZ.sec*1e9 + TZ.nanosec) - (self.TZant.sec*1e9 + self.TZant.nanosec))*1e-9
         
-        deltaZ = (Z - self.Zant)/deltaTZ
+        #For now, consider simultaneous robot and Aurora readings
+        TZ = TX
+        deltaTZ = deltaTX
+
+        deltaZ = (self.Z - self.Zant)/deltaTZ
         deltaX = (X - self.Xant)/deltaTX
 
-        self.Zant = Z
+        self.Zant = self.Z
         self.Xant = X
         self.TXant = TX
         self.TZant = TZ
@@ -111,8 +125,7 @@ class EstimatorNode(Node):
         if (self.i > 0): #Does nothing if first sample (no deltas)
             self.J = self.J + alpha*np.matmul(((deltaZ-np.matmul(self.J, deltaX))/(np.matmul(np.transpose(deltaX), deltaX)+1e-9)), np.transpose(deltaX))
 
-        self.get_logger().info('Sample #%i: X = %s in stage frame' % (self.i, X.T))
-        self.get_logger().info('Sample #%i: Z = %s in stage frame' % (self.i, Z.T))
+        self.get_logger().info('Sample #%i: X = %s in robot frame' % (self.i, X.T))
         self.get_logger().info('Sample #%i: J = \n%s' %  (self.i, self.J))
         self.i += 1
 
@@ -128,11 +141,11 @@ class EstimatorNode(Node):
 ########################################################################
 ### Auxiliar functions ###
 
-# Function: needle2stage
-# DO: Transform 3D point from needle frame to stage frame
+# Function: needle2robot
+# DO: Transform 3D point from needle frame to robot frame
 # Input: point in needle frame (numpy-array [x, y, z])
-# Output: point in stage frame (numpy-array [x, y, z])
-def needle2stage(xn):
+# Output: point in robot frame (numpy-array [x, y, z])
+def needle2robot(xn):
 
     #Define frame transformation
     rotx = np.quaternion(math.cos(-math.pi/4), math.sin(-math.pi/4),0,0)   # [cos(-90/2), sin(-90/2)*[1,0,0]]
@@ -143,7 +156,7 @@ def needle2stage(xn):
     #Build pure quaternion with point in needle frame
     pxn = np.quaternion(0, xn[0], xn[1], xn[2])
     
-    #Transform to stage frame
+    #Transform to robot frame
     pxs = pns + rns*pxn*rns.conj()
     
 
