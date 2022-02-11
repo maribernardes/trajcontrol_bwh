@@ -1,12 +1,14 @@
 import os
+import sys
 
 from ament_index_python.packages import get_package_share_directory
-from launch import LaunchDescription
-#from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch import LaunchDescription, actions
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
+
 
 def generate_launch_description():
-    ld = LaunchDescription()
 
     config = os.path.join(
         get_package_share_directory('trajcontrol'),
@@ -14,14 +16,20 @@ def generate_launch_description():
         'aurora_smart_template_params.yaml'
         )
 
-    sensor = Node(
+    aurora = Node(
         package="ros2_igtl_bridge",
         executable="igtl_node",
         parameters=[
             {"RIB_server_ip":"localhost"},
-            {"RIB_port": "18944"},
+            {"RIB_port": 18944},
             {"RIB_type": "client"}
         ]
+    )
+
+    sensor = Node(
+        package = "trajcontrol",
+        executable = "sensor_processing",
+        parameters=[{"registration":LaunchConfiguration('registration')}]
     )
 
     robot = Node(
@@ -41,15 +49,28 @@ def generate_launch_description():
         executable="controller_node"
     )   
 
-    user = Node(
+    file = Node(
         package="trajcontrol",
-        executable="virtual_UI"
+        executable="save_file",
+        parameters=[config]
     )
 
-    ld.add_action(sensor)
-    ld.add_action(robot)
-    ld.add_action(estimator)
-    ld.add_action(controller)
-    ld.add_action(user)
+    #user = Node(
+    #    package="trajcontrol",
+    #    executable="virtual_UI"
+    #)
 
-    return ld
+    return LaunchDescription([
+        DeclareLaunchArgument(
+            "registration",
+            default_value="1",
+            description="Registration: 0 - Use previous registration file, 1 - Make new registration"
+        ),
+        actions.LogInfo(msg=["registration: ", LaunchConfiguration('registration')]),
+        #aurora,
+        sensor,
+        #estimator,
+        #controller,
+        #robot,
+        #file
+    ])

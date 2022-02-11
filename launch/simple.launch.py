@@ -11,19 +11,22 @@ def generate_launch_description():
     config = os.path.join(
         get_package_share_directory('trajcontrol'),
         'config',
-        'virtual_nodes_params.yaml'
+        'simple_params.yaml'
         )
 
-    sensor = Node(
-        package="trajcontrol",
-        executable="virtual_sensor",
-        parameters=[config]
+    aurora = Node(
+        package="ros2_igtl_bridge",
+        executable="igtl_node",
+        parameters=[
+            {"RIB_server_ip":"localhost"},
+            {"RIB_port": 18944},
+            {"RIB_type": "client"}
+        ]
     )
 
     robot = Node(
         package="trajcontrol",
-        executable="virtual_robot",
-        parameters=[config]
+        executable="smart_template"
     )
 
     estimator = Node(
@@ -37,15 +40,21 @@ def generate_launch_description():
         executable="controller_node"
     )   
 
-    user = Node(
+    file = Node(
         package="trajcontrol",
-        executable="virtual_UI"
+        executable="save_file",
+        parameters=[config]
     )
 
-    ld.add_action(sensor)
+#    user = Node(
+#        package="trajcontrol",
+#        executable="virtual_UI"
+#    )
+
+    ld.add_action(aurora)
     ld.add_action(robot)
     ld.add_action(estimator)
     ld.add_action(controller)
-    ld.add_action(user)
+    ld.add_action(file)
 
     return ld
