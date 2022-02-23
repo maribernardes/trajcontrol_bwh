@@ -36,8 +36,6 @@ class EstimatorNode(Node):
 
         #Published topics
         self.publisher_jacobian = self.create_publisher(Image, '/needle/state/jacobian', 10)
-        #timer_period = 0.5  # seconds
-        #self.timer = self.create_timer(timer_period, self.timer_jacobian_callback)
         
         # Print numpy floats with only 3 decimal places
         np.set_printoptions(formatter={'float': lambda x: "{0:0.4f}".format(x)})
@@ -116,16 +114,7 @@ class EstimatorNode(Node):
         self.get_logger().info('Sample #%i: X = %s in robot frame' % (self.i, X.T))
         self.i += 1
         
-        # Remove when we change to timer for controller
-        msg = CvBridge().cv2_to_imgmsg(self.J)
-        msg.header.stamp = self.get_clock().now().to_msg()
-
-        self.publisher_jacobian.publish(msg)
-        self.get_logger().info('Publish - Jacobian: %s' %  self.J)
-
-    # Publish current Jacobian matrix
-    def timer_jacobian_callback(self):
-
+        # Publish new Jacobian
         msg = CvBridge().cv2_to_imgmsg(self.J)
         msg.header.stamp = self.get_clock().now().to_msg()
 

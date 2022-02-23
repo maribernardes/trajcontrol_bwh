@@ -27,8 +27,12 @@ class SaveFile(Node):
         self.subscription_robot = self.create_subscription(PoseStamped, '/stage/state/needle_pose', self.robot_callback, 10)
         self.subscription_robot # prevent unused variable warning
 
-        #Topics from Aurora sensor node
-        self.subscription_sensor = self.create_subscription(Transform, 'IGTL_TRANSFORM_IN', self.aurora_callback, 10)
+        #Topics from sensor node
+        self.subscription_aurora = self.create_subscription(Transform, 'IGTL_TRANSFORM_IN', self.aurora_callback, 10)
+        self.subscription_aurora # prevent unused variable warning
+
+        #Topics from sensor processing node
+        self.subscription_sensor = self.create_subscription(PoseStamped, '/needle/state/pose_filtered', self.sensor_callback, 10)
         self.subscription_sensor # prevent unused variable warning
 
         #Topics from estimator_node
@@ -47,8 +51,9 @@ class SaveFile(Node):
         #Array of data
         header = ['Timestamp sec', 'Timestamp nanosec', \
             'Entry_point x', 'Entry_point y', 'Entry_point z', \
-            'Base x', 'Base y', 'Base z', 'Base qw', 'Base qx', 'Base qy', 'Base qz',
+            'Aurora x', 'Aurora y', 'Aurora z', 'Aurora qw', 'Aurora qx', 'Aurora qy', 'Aurora qz',
             'Tip x', 'Tip y', 'Tip z', 'Tip qw', 'Tip qx', 'Tip qy', 'Tip qz',
+            'Base x', 'Base y', 'Base z', 'Base qw', 'Base qx', 'Base qy', 'Base qz',
             'J00', 'J01', 'J02', 'J03', 'J04', 'J05', 'J06', \
             'J10', 'J11', 'J12', 'J13', 'J14', 'J15', 'J16', \
             'J20', 'J21', 'J22', 'J23', 'J24', 'J25', 'J26', \
@@ -64,9 +69,10 @@ class SaveFile(Node):
             writer.writerow(header) # write a row to the csv file
 
         #Last data received
-        self.entry_point = [0,0,0]  #skin entry point
-        self.X = [0,0,0,0,0,0,0]    #robot/needle base
-        self.Z = [0,0,0,0,0,0,0]    #needle tip
+        self.entry_point = [0,0,0]      #skin entry point
+        self.aurora = [0,0,0,0,0,0,0]   #aurora data
+        self.Z = [0,0,0,0,0,0,0]        #needle tip (filtered and transformed to robot frame)
+        self.X = [0,0,0,0,0,0,0]        #robot/needle base
         self.J = [0,0,0,0,0,0,0, \
                   0,0,0,0,0,0,0, \
                   0,0,0,0,0,0,0, \
@@ -74,22 +80,29 @@ class SaveFile(Node):
                   0,0,0,0,0,0,0, \
                   0,0,0,0,0,0,0, \
                   0,0,0,0,0,0,0]    #jacobian matrix
+        self.cmd = [0,0]
 
     #Get current entry_point
     def entry_point_callback(self, msg):
         self.entry_point = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
+
+    #Get Aurora data
+    def aurora_callback(self, msg):
+        aurora = msg.transform
+        self.aurora = [aurora.translation.x, aurora.translation.y, aurora.translation.z, \
+            aurora.rotation.w, aurora.rotation.x, aurora.rotation.y, aurora.rotation.z]
+
+    #Get current Z (filtered and in robot frame)
+    def sensor_callback(self, msg):
+        sensor = msg.pose
+        self.Z = [sensor.position.x, sensor.position.y, sensor.position.z, \
+            sensor.orientation.w, sensor.orientation.x, sensor.orientation.y, sensor.orientation.z]
 
     #Get current X
     def robot_callback(self, msg):
         robot = msg.pose
         self.X = [robot.position.x, robot.position.y, robot.position.z, \
             robot.orientation.w, robot.orientation.x, robot.orientation.y, robot.orientation.z]
-
-    #Get current Z
-    def aurora_callback(self, msg):
-        sensor = msg.transform
-        self.Z = [sensor.translation.x, sensor.translation.y, sensor.translation.z, \
-            sensor.rotation.w, sensor.rotation.x, sensor.rotation.y, sensor.rotation.z]
 
     #Get current J
     def jacobian_callback(self,msg):
@@ -103,9 +116,11 @@ class SaveFile(Node):
     def write_file_callback(self):
         now = self.get_clock().now().to_msg()
        
-        data = [now.sec, now.nanosec, self.entry_point[0], self.entry_point[1], self.entry_point[2], \
-            self.X[0], self.X[1], self.X[2], self.X[3], self.X[4], self.X[5], self.X[6], \
+        data = [now.sec, now.nanosec, \
+            self.entry_point[0], self.entry_point[1], self.entry_point[2], \
+            self.aurora[0], self.aurora[1], self.aurora[2], self.aurora[3], self.aurora[4], self.aurora[5], self.aurora[6], \
             self.Z[0], self.Z[1], self.Z[2], self.Z[3], self.Z[4], self.Z[5], self.Z[6], \
+            self.X[0], self.X[1], self.X[2], self.X[3], self.X[4], self.X[5], self.X[6], \
             self.J[0], self.J[1], self.J[2], self.J[3], self.J[4], self.J[5], self.J[6], \
             self.J[7], self.J[8], self.J[9], self.J[10], self.J[11], self.J[12], self.J[13], \
             self.J[14], self.J[15], self.J[16], self.J[17], self.J[18], self.J[19], self.J[20], \
