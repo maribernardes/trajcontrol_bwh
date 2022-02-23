@@ -17,6 +17,7 @@ class SensorProcessing(Node):
         #Declare node parameters
         self.declare_parameter('registration') # Registration parameter
         
+        #Initialize registration transformation
         if(self.get_parameter('registration').get_parameter_value().integer_value == 1):
             registration(self)
         else:
@@ -32,7 +33,6 @@ class SensorProcessing(Node):
         self.i=0
         self.aurora = np.empty(shape=[0,7])         # Aurora readings as they are sent
         self.Z = np.empty(shape=[0,7])              # Filtered data in robot frame
-        self.registration = np.empty(shape=[0,7])   # Registration transformation (x, y, z, qw, qx, qy, qz)
     
     # Get current Aurora sensor measurements
     def aurora_callback(self, msg_sensor):
@@ -45,22 +45,22 @@ class SensorProcessing(Node):
             self.aurora = np.row_stack((self.aurora, Z_sensor))
 
             self.i += 1
-            self.get_logger().info('Sample #%i: Z = %s in aurora frame' % (self.i, Z_sensor.T))
+            #self.get_logger().info('Sample #%i: Z = %s in aurora frame' % (self.i, Z_sensor))
 
             # Smooth the measurements with a median filter 
-            n = self.aurora.size
+            n = self.aurora.shape[0]
             size_win = min(n, 500) #array window size
             if (size_win>0): 
                 Z_filt = median_filter(self.aurora[n-size_win:n,:], size=(40,1)) # use 40 samples median filter (column-wise)
-                Z_sensor = Z_filt[size_win-1,0]                                  # get last value
-            
+                Z_sensor = Z_filt[size_win-1,:]                                  # get last value
+                        
             # Transform from sensor to robot frame
             self.Z = pose_transform(Z_sensor, self.registration)
             
             # Publish last needle filtered pose in robot frame
             msg = PoseStamped()
             # msg.header.stamp = msg_sensor.header.stamp # Use same timestamp from Aurora (Commented it out because Plus has no timestamp)
-            msg.header.frame_id = 'robot'
+            msg.header.frame_id = 'stage'
             msg.pose.position = Point(x=self.Z[4], y=self.Z[5], z=self.Z[6])
             msg.pose.orientation = Quaternion(w=self.Z[0], x=self.Z[1], y=self.Z[2], z=self.Z[3])
             self.publisher_filtered.publish(msg)

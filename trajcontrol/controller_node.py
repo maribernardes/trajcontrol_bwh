@@ -48,6 +48,7 @@ class ControllerNode(Node):
         # y for user input (insertion depth)
         ##################################
         # Send command to stage:
+        self.cmd = np.array([1.2, 3.4])
         self.send_cmd(1.2, 3.4)
 
     # Get current target point from UI node
@@ -59,8 +60,8 @@ class ControllerNode(Node):
     def send_cmd(self, x, z):
 
         goal_msg = MoveStage.Goal()
-        goal_msg.x = self.cmd.x
-        goal_msg.z = self.cmd.z
+        goal_msg.x = self.cmd[0]
+        goal_msg.z = self.cmd[1]
         goal_msg.eps = 0.0
 
         self.get_logger().info('Waiting for action server...')
@@ -99,8 +100,8 @@ class ControllerNode(Node):
     def timer_control_callback(self):
 
         msg = PointStamped()
-        msg.point.x = self.cmd[0,0]
-        msg.point.z = self.cmd[2,0]
+        msg.point.x = float(self.cmd[0])
+        msg.point.z = float(self.cmd[1])
         msg.header.stamp = self.get_clock().now().to_msg()
 
         self.publisher_control.publish(msg)

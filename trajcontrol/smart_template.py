@@ -2,7 +2,7 @@ import rclpy
 import numpy as np
 import ament_index_python 
 import serial
-
+import time
 
 
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
@@ -15,9 +15,12 @@ from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import Quaternion
 from transforms3d.euler import euler2quat
 from scipy.io import loadmat
+from std_msgs.msg import Int8
 
+from datetime import datetime
+now = datetime.now()
 
-MM_2_COUNT = 2000.0/2.5349
+MM_2_COUNT = 500
 COUNT_2_MM = 2.5349/2000.0
 
 class VirtualRobot(Node):
@@ -30,7 +33,11 @@ class VirtualRobot(Node):
         #Published topics
         self.publisher_needle_pose = self.create_publisher(PoseStamped, '/stage/state/needle_pose', 10)
         timer_period = 0.5  # seconds
-        self.timer = self.create_timer(timer_period, self.timer_needlepose_callback)
+        #self.timer = self.create_timer(timer_period, self.timer_needlepose_callback)
+
+        #Topics from Insertion node
+        self.subscription_insertion = self.create_subscription(Int8, '/needle/state/insertion', self.insertion_callback, 10)
+        self.subscription_insertion  # prevent unused variable warning
 
         #Action server
         self._action_server = ActionServer(self, MoveStage, '/move_stage', execute_callback=self.execute_callback,\
@@ -39,16 +46,18 @@ class VirtualRobot(Node):
 
         #Start serial communication
         try:
-            self.ser = serial.Serial('/dev/ttyUSB0', baudrate=115200, timeout=1)  # open serial port
-            #self.ser.open()
+            self.ser = serial.Serial('/dev/ttyUSB1', baudrate=115200, timeout=1)  # open serial port
             self.connectionStatus = True
-            self.get_logger().info('Serial connection open ttyUSB0')
+            self.get_logger().info('Serial connection open ttyUSB1')
+            print(self.ser.is_open)
         except:
             try:
-               self.ser = serial.Serial('/dev/ttyUSB1', baudrate=115200, timeout=1)  # open serial port
-               self.get_logger().info('Serial connection open ttyUSB1')
+               self.ser = serial.Serial('/dev/ttyUSB2', baudrate=115200, timeout=1)  # open serial port
+               self.get_logger().info('Serial connection open ttyUSB2')
+               print(self.ser.is_open)
             except:
                self.get_logger().info('Could not open Serial connection')
+       
         
         self.needle_pose = 0.0
         self.time_stamp = 0.0
@@ -58,7 +67,7 @@ class VirtualRobot(Node):
         try:
             self.ser.flushInput()
             time.sleep(0.5)
-            self.ser.write(str("TP;"))
+            self.ser.write(str.encode("TP;"))
             time.sleep(0.1)
             bytesToRead = self.ser.inWaiting()
             data_temp = self.ser.read(bytesToRead-3)
@@ -68,8 +77,37 @@ class VirtualRobot(Node):
             return str(0)
         return data_temp
 
+    def insertion_callback(self,msg_ins):
+        self.insertion = msg_ins.data
+        self.get_logger().info('PM Listening Insertion Node %f mm'  % (self.insertion))
+        
+        
+        
+        msg = PoseStamped()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = "stage"
+
+
+        read_position = self.getMotorPosition()
+
+        Z = [0,0,0] #read_position.split(',')
+
+        msg.pose.position.x = float(Z[0])*COUNT_2_MM
+        msg.pose.position.y = float(self.insertion)
+        msg.pose.position.z = float(Z[1])*COUNT_2_MM
+        print("test antes antes")
+        msg.pose.orientation = Quaternion(x=float(0), y=float(0), z=float(0), w=float(0))
+        print("test antes")
+        self.publisher_needle_pose.publish(msg)
+        print("test")
+        self.get_logger().info('Publish - Needle pose %i: x=%f, y=%f, z=%f, q=[%f, %f, %f, %f] in %s frame'  % (self.i, msg.pose.position.x, \
+            msg.pose.position.y, msg.pose.position.z,  msg.pose.orientation.x, \
+            msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w, msg.header.frame_id))
+        self.i += 1
+
+
     # Publish current needle_pose
-    def timer_needlepose_callback(self):
+    def needlepose_callback(self):
 
         msg = PoseStamped()
         msg.header.stamp = now
@@ -81,8 +119,8 @@ class VirtualRobot(Node):
         Z = read_position.split(',')
 
         msg.pose.position.x = float(Z[0])*COUNT_2_MM
-        msg.pose.position.y = float(Z[1])*COUNT_2_MM
-        msg.pose.position.z = float(0)
+        msg.pose.position.y = self.insertion
+        msg.pose.position.z = float(Z[1])*COUNT_2_MM
 
         msg.pose.orientation = Quaternion(x=float(0), y=float(0), z=float(0), w=float(0))
 
@@ -110,21 +148,26 @@ class VirtualRobot(Node):
 
     def exec_motion(self):
         try:
-            self.ser.write(str("BG \r"))
-            time.sleep(0.01)
-            self.ser.write(str("PR 0,0,0,0 \r"))
+            self.ser.write(str.encode("BG \r"))
+            time.sleep(0.1)
+            self.ser.write(str.encode("PR 0,0,0,0 \r"))
+            self.get_logger().info("Sent BG to Galil")
             return 1
         except:
-            self.get_logger().info("*** could not send command ***")
+            self.get_logger().info("*** could not send exec command ***")
             return 0
 
     def send_movement_in_counts(self,X,Channel):
-        try:
-            self.ser.write(str("PR%s=%d;" % (Channel,X)))
-            time.sleep(0.1)
-        except:
-            self.get_logger().info("*** could not send command ***")
-            return 0
+   #     try:
+        print(X)
+        send = "PR%s=%d;" % (Channel,int(X))
+        print(send)
+        self.ser.write(str.encode(send))
+        time.sleep(0.1)
+        self.get_logger().info("Sent to Galil PR%s=%d" % (Channel,X))
+    #    except:
+    #        self.get_logger().info("*** could not send command ***")
+    #        return 0
 
 
     # Execute a goal
@@ -141,10 +184,11 @@ class VirtualRobot(Node):
             self.get_logger().info('Goal canceled')
             return MoveStage.Result()
 
+        my_goal = goal_handle.request
         # Update control input
-        print(MoveStage.Goal.x)
-        self.send_movement_in_counts(MoveStage.Goal.x,"A")
-        self.send_movement_in_counts(MoveStage.Goal.z, "B")
+        self.send_movement_in_counts(my_goal.x*MM_2_COUNT,"A")
+        self.send_movement_in_counts(my_goal.z*MM_2_COUNT, "B")
+        self.exec_motion()
 
 
         feedback_msg.x = float(0.0)
