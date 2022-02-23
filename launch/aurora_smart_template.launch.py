@@ -63,14 +63,15 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
             "registration",
-            default_value="1",
-            description="Registration: 0 - Use previous registration file, 1 - Make new registration"
+            default_value="0",
+            description="Registration: 0 - Use previous registration, 1 - Make new registration"
         ),
         actions.LogInfo(msg=["registration: ", LaunchConfiguration('registration')]),
-        #aurora,
+        aurora,
         sensor,
-        #estimator,
-        #controller,
-        #robot,
-        #file
+        estimator,
+        controller,
+        robot,
+        file,
+        #user
     ])

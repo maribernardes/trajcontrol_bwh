@@ -30,8 +30,8 @@ class EstimatorNode(Node):
         self.subscription_robot = self.create_subscription(PoseStamped, '/stage/state/needle_pose', self.robot_callback, 10)
         self.subscription_robot # prevent unused variable warning
 
-        #Topics from Aurora sensor node
-        self.subscription_sensor = self.create_subscription(Transform, 'IGTL_TRANSFORM_IN', self.aurora_callback, 10)
+        #Topics from sensor processing node
+        self.subscription_sensor = self.create_subscription(PoseStamped, '/needle/state/pose_filtered', self.sensor_callback, 10)
         self.subscription_sensor # prevent unused variable warning
 
         #Published topics
@@ -71,23 +71,15 @@ class EstimatorNode(Node):
         self.get_logger().info('Listening UI - Skin entry point: x=%f, y=%f, z=%f in %s frame'  % (entry_point.x, entry_point.y, \
             entry_point.z, msg.header.frame_id))
 
-    # Get current needle tip from Aurora sensor measurements
+    # Get current needle tip from sensor processing node
     # Z = [x_tip, y_tip, z_tip, q_tip] (Obs: for q, roll=pitch)
-    def aurora_callback(self, msg_sensor):
-        # Get needle shape from Aurora IGTL
-        name = msg_sensor.name      
-        if name=="NeedleToTracker": # Name is adjusted in Plus .xml
-            # No timestamp from Plus
-            #TZ = msg_sensor.header.stamp 
-            #deltaTZ = ((TZ.sec*1e9 + TZ.nanosec) - (self.TZant.sec*1e9 + self.TZant.nanosec))*1e-9
+    def sensor_callback(self, msg_sensor):
+        # Get filtered sensor in robot frame        
+        self.Z = np.array([[msg_sensor.pose.position.x, msg_sensor.pose.position.y, msg_sensor.pose.position.z, \
+            msg_sensor.pose.orientation.w, msg_sensor.pose.orientation.x, msg_sensor.pose.orientation.y, msg_sensor.pose.orientation.z]]).T
 
-            ##########################################
-            # TODO: Transform Z from Aurora to robot frame
-            ##########################################
-
-            self.Z = np.array([[msg_sensor.transform.translation.x, msg_sensor.transform.translation.y, msg_sensor.transform.translation.z, \
-                msg_sensor.transform.rotation.w, msg_sensor.transform.rotation.x, msg_sensor.transform.rotation.y, msg_sensor.transform.rotation.z]]).T
-            self.get_logger().info('Sample #%i: Z = %s in Aurora frame' % (self.i, self.Z.T))
+        self.i+= 1
+        self.get_logger().info('Sample #%i: Z = %s in %s frame' % (self.i, self.Z.T, msg_sensor.header.frame_id))
 
     # Get current needle_pose from robot node
     # Get estimator input X ("Prediction")
@@ -100,8 +92,8 @@ class EstimatorNode(Node):
         TX = msg_robot.header.stamp
         
         # From robot, get input X
-        X = np.array([[robot.position.x, robot.position.y, robot.position.z, robot.orientation.w, \
-            robot.orientation.x, robot.orientation.y, robot.orientation.z]]).T
+        X = np.array([[robot.position.x, robot.position.y, robot.position.z, \
+            robot.orientation.w, robot.orientation.x, robot.orientation.y, robot.orientation.z]]).T
 
         ##########################################
         # TODO: Transform X from needle to robot frame
@@ -140,28 +132,6 @@ class EstimatorNode(Node):
 
 ########################################################################
 ### Auxiliar functions ###
-
-# Function: needle2robot
-# DO: Transform 3D point from needle frame to robot frame
-# Input: point in needle frame (numpy-array [x, y, z])
-# Output: point in robot frame (numpy-array [x, y, z])
-def needle2robot(xn):
-
-    #Define frame transformation
-    rotx = np.quaternion(math.cos(-math.pi/4), math.sin(-math.pi/4),0,0)   # [cos(-90/2), sin(-90/2)*[1,0,0]]
-    rotz = np.quaternion(math.cos(math.pi/2), 0, 0, math.sin(math.pi/2))   # [cos(180/2), sin(180/2)*[0,0,1]]
-    rns = rotx*rotz
-    pns = np.quaternion(0, 0, 0, 0)                                        #[0, x, y, z]
-
-    #Build pure quaternion with point in needle frame
-    pxn = np.quaternion(0, xn[0], xn[1], xn[2])
-    
-    #Transform to robot frame
-    pxs = pns + rns*pxn*rns.conj()
-    
-
-    xs = np.array([ pxs.x, pxs.y, pxs.z ])
-    return xs
 
 # Function: upforw2quat
 # DO:Get quaternion from up and forward vectors

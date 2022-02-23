@@ -1,6 +1,6 @@
 import rclpy
+import os
 import numpy as np
-import ament_index_python
 
 from rclpy.node import Node
 from geometry_msgs.msg import PoseArray
@@ -22,9 +22,7 @@ class VirtualSensor(Node):
         self.timer = self.create_timer(timer_period, self.timer_callback)
 
         #Load data from matlab file
-        package_path = str(ament_index_python.get_package_share_path('trajcontrol'))
-        file_name = self.get_parameter('dataset').get_parameter_value().string_value
-        file_path = package_path + '/../../../../src/trajcontrol/files/'+ file_name +'.mat'
+        file_path = os.path.join('src','trajcontrol','files',self.get_parameter('dataset').get_parameter_value().string_value + '.mat') #String with full path to file
         trial_data = loadmat(file_path, mat_dtype=True)
         
         self.sensor = trial_data['sensor'][0]
