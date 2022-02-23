@@ -61,8 +61,8 @@ class SensorProcessing(Node):
             msg = PoseStamped()
             # msg.header.stamp = msg_sensor.header.stamp # Use same timestamp from Aurora (Commented it out because Plus has no timestamp)
             msg.header.frame_id = 'stage'
-            msg.pose.position = Point(x=self.Z[4], y=self.Z[5], z=self.Z[6])
-            msg.pose.orientation = Quaternion(w=self.Z[0], x=self.Z[1], y=self.Z[2], z=self.Z[3])
+            msg.pose.position = Point(x=self.Z[0], y=self.Z[1], z=self.Z[2])
+            msg.pose.orientation = Quaternion(w=self.Z[3], x=self.Z[4], y=self.Z[5], z=self.Z[6])
             self.publisher_filtered.publish(msg)
 
 def registration(self):

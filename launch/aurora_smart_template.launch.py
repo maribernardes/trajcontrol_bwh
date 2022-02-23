@@ -34,8 +34,7 @@ def generate_launch_description():
 
     robot = Node(
         package="trajcontrol",
-        executable="smart_template",
-        parameters=[config]
+        executable="smart_template"
     )
 
     estimator = Node(
@@ -52,7 +51,7 @@ def generate_launch_description():
     file = Node(
         package="trajcontrol",
         executable="save_file",
-        parameters=[config]
+        parameters=[{"filename":LaunchConfiguration('filename')}]
     )
 
     #user = Node(
@@ -66,12 +65,18 @@ def generate_launch_description():
             default_value="0",
             description="Registration: 0 - Use previous registration, 1 - Make new registration"
         ),
+        DeclareLaunchArgument(
+            "filename",
+            default_value="my_data",
+            description="File name to save .csv file with experimental data"
+        ),
         actions.LogInfo(msg=["registration: ", LaunchConfiguration('registration')]),
+        actions.LogInfo(msg=["filename: ", LaunchConfiguration('filename')]),
         aurora,
         sensor,
         estimator,
         controller,
         robot,
-        #file,
+        file
         #user
     ])

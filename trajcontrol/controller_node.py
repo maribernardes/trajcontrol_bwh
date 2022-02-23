@@ -26,8 +26,6 @@ class ControllerNode(Node):
 
         #Published topics
         self.publisher_control = self.create_publisher(PointStamped, '/stage/control/cmd', 10)
-        timer_period = 0.5  # seconds
-        self.timer = self.create_timer(timer_period, self.timer_control_callback)
 
         #Action client 
         #Check the correct action name and msg type from John's code
@@ -50,6 +48,16 @@ class ControllerNode(Node):
         # Send command to stage:
         self.cmd = np.array([1.2, 3.4])
         self.send_cmd(1.2, 3.4)
+        
+        # Publish control output
+        msg = PointStamped()
+        msg.point.x = float(self.cmd[0])
+        msg.point.z = float(self.cmd[1])
+        msg.header.stamp = self.get_clock().now().to_msg()
+
+        self.publisher_control.publish(msg)
+        self.get_logger().info('Publish - Control cmd: %s' %  self.cmd)
+
 
     # Get current target point from UI node
     def target_callback(self, msg):
@@ -96,16 +104,6 @@ class ControllerNode(Node):
         else:
             self.get_logger().info('Goal failed with status: {0}'.format(status))
 
-    # Publish current control signal
-    def timer_control_callback(self):
-
-        msg = PointStamped()
-        msg.point.x = float(self.cmd[0])
-        msg.point.z = float(self.cmd[1])
-        msg.header.stamp = self.get_clock().now().to_msg()
-
-        self.publisher_control.publish(msg)
-        self.get_logger().info('Publish - Control cmd: %s' %  self.cmd)
 
 def main(args=None):
     rclpy.init(args=args)

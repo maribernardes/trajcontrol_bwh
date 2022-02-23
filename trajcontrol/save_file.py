@@ -1,12 +1,14 @@
 import rclpy
 import os
 import csv
+import numpy as np
 
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped, PointStamped
 from ros2_igtl_bridge.msg import Transform
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
+from numpy import asarray
 
 
 class SaveFile(Node):
@@ -27,7 +29,7 @@ class SaveFile(Node):
         self.subscription_robot = self.create_subscription(PoseStamped, '/stage/state/needle_pose', self.robot_callback, 10)
         self.subscription_robot # prevent unused variable warning
 
-        #Topics from sensor node
+        #Topics from aurora node
         self.subscription_aurora = self.create_subscription(Transform, 'IGTL_TRANSFORM_IN', self.aurora_callback, 10)
         self.subscription_aurora # prevent unused variable warning
 
@@ -36,12 +38,12 @@ class SaveFile(Node):
         self.subscription_sensor # prevent unused variable warning
 
         #Topics from estimator_node
-        self.subscription_estimator = self.create_subscription(Image, '/needle/state/jacobian', self.jacobian_callback, 10)
+        self.subscription_estimator = self.create_subscription(Image, '/needle/state/jacobian', self.estimator_callback, 10)
         self.subscription_estimator  # prevent unused variable warning
 
         #Topics from controller_node
-        self.subscription_estimator = self.create_subscription(PointStamped, '/stage/control/cmd', self.control_callback, 10)
-        self.subscription_estimator  # prevent unused variable warning
+        self.subscription_controller = self.create_subscription(PointStamped, '/stage/control/cmd', self.control_callback, 10)
+        self.subscription_controller  # prevent unused variable warning
 
         
         #Published topics
@@ -103,10 +105,11 @@ class SaveFile(Node):
         robot = msg.pose
         self.X = [robot.position.x, robot.position.y, robot.position.z, \
             robot.orientation.w, robot.orientation.x, robot.orientation.y, robot.orientation.z]
-
+        self.get_logger().info('Received X = %s in robot frame' % (self.X))
+        
     #Get current J
-    def jacobian_callback(self,msg):
-        self.J = CvBridge().imgmsg_to_cv2(msg)
+    def estimator_callback(self,msg):
+        self.J = np.array(CvBridge().imgmsg_to_cv2(msg)).flatten()
 
     #Get current control output
     def control_callback(self,msg):
