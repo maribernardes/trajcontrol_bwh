@@ -1,9 +1,9 @@
 import rclpy
-import ament_index_python 
+import os
 import csv
 
 from rclpy.node import Node
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, PointStamped
 from ros2_igtl_bridge.msg import Transform
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
@@ -17,8 +17,7 @@ class SaveFile(Node):
         
         #Declare node parameters
         self.declare_parameter('filename', 'my_data') #Name of file where data values are saved
-        package_path = str(ament_index_python.get_package_share_path('trajcontrol')) 
-        self.filename = package_path + '/../../../../src/trajcontrol/data/' + self.get_parameter('filename').get_parameter_value().string_value + '.csv' #String with full path to file
+        self.filename = os.path.join('src','trajcontrol','data',self.get_parameter('filename').get_parameter_value().string_value + '.csv') #String with full path to file
 
         #Topics from UI node
         self.subscription_UI = self.create_subscription(PoseStamped, '/subject/state/skin_entry', self.entry_point_callback, 10)
@@ -32,11 +31,15 @@ class SaveFile(Node):
         self.subscription_sensor = self.create_subscription(Transform, 'IGTL_TRANSFORM_IN', self.aurora_callback, 10)
         self.subscription_sensor # prevent unused variable warning
 
-        #Topics from Estimator node
+        #Topics from estimator_node
         self.subscription_estimator = self.create_subscription(Image, '/needle/state/jacobian', self.jacobian_callback, 10)
         self.subscription_estimator  # prevent unused variable warning
 
+        #Topics from controller_node
+        self.subscription_estimator = self.create_subscription(PointStamped, '/stage/control/cmd', self.control_callback, 10)
+        self.subscription_estimator  # prevent unused variable warning
 
+        
         #Published topics
         timer_period = 0.5  # seconds
         self.timer = self.create_timer(timer_period, self.write_file_callback)
@@ -52,7 +55,8 @@ class SaveFile(Node):
             'J30', 'J31', 'J32', 'J33', 'J34', 'J35', 'J36', \
             'J40', 'J41', 'J42', 'J43', 'J44', 'J45', 'J46', \
             'J50', 'J51', 'J52', 'J53', 'J54', 'J55', 'J56', \
-            'J60', 'J61', 'J62', 'J63', 'J64', 'J65', 'J66'
+            'J60', 'J61', 'J62', 'J63', 'J64', 'J65', 'J66', \
+            'Control_x', 'Control_z'    
         ]
         
         with open(self.filename, 'w', newline='', encoding='UTF8') as f: # open the file in the write mode
@@ -90,6 +94,10 @@ class SaveFile(Node):
     #Get current J
     def jacobian_callback(self,msg):
         self.J = CvBridge().imgmsg_to_cv2(msg)
+
+    #Get current control output
+    def control_callback(self,msg):
+        self.cmd = [msg.point.x, msg.point.z]        
         
     #Save data do file
     def write_file_callback(self):
@@ -104,7 +112,8 @@ class SaveFile(Node):
             self.J[21], self.J[22], self.J[23], self.J[24], self.J[25], self.J[26], self.J[27], \
             self.J[28], self.J[29], self.J[30], self.J[31], self.J[32], self.J[33], self.J[34], \
             self.J[35], self.J[36], self.J[37], self.J[38], self.J[39], self.J[40], self.J[41], \
-            self.J[42], self.J[43], self.J[44], self.J[45], self.J[46], self.J[47], self.J[48]]
+            self.J[42], self.J[43], self.J[44], self.J[45], self.J[46], self.J[47], self.J[48], \
+            self.cmd[0], self.cmd[1]]
         
         with open(self.filename, 'a', newline='', encoding='UTF8') as f: # open the file in append mode
             writer = csv.writer(f) # create the csv writer

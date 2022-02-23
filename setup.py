@@ -28,6 +28,7 @@ setup(
             'virtual_sensor = trajcontrol.virtual_sensor:main',
             'virtual_robot = trajcontrol.virtual_robot:main',
             'virtual_UI = trajcontrol.virtual_UI:main',
+            'sensor_processing = trajcontrol.sensor_processing:main',
             'smart_template = trajcontrol.smart_template:main',
             'estimator_node = trajcontrol.estimator_node:main',
             'controller_node = trajcontrol.controller_node:main',

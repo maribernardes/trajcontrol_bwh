@@ -1,6 +1,6 @@
 import rclpy
+import os
 import numpy as np
-import ament_index_python 
 
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -32,9 +32,7 @@ class VirtualRobot(Node):
             callback_group=ReentrantCallbackGroup(), goal_callback=self.goal_callback, cancel_callback=self.cancel_callback)
 
         #Load data from matlab file
-        package_path = str(ament_index_python.get_package_share_path('trajcontrol'))
-        file_name = self.get_parameter('dataset').get_parameter_value().string_value
-        file_path = package_path + '/../../../../src/trajcontrol/files/'+ file_name +'.mat'
+        file_path = os.path.join('src','trajcontrol','files',self.get_parameter('dataset').get_parameter_value().string_value+ '.mat') #String with full path to file
         trial_data = loadmat(file_path, mat_dtype=True)
         
         self.needle_pose = trial_data['needle_pose'][0]

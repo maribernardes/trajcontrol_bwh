@@ -5,7 +5,7 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 from action_msgs.msg import GoalStatus
 
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, PointStamped
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from stage_control_interfaces.action import MoveStage
@@ -24,10 +24,16 @@ class ControllerNode(Node):
         self.subscription_UI = self.create_subscription(PoseStamped, '/subject/state/target', self.target_callback, 10)
         self.subscription_UI  # prevent unused variable warning
 
+        #Published topics
+        self.publisher_control = self.create_publisher(PointStamped, '/stage/control/cmd', 10)
+        timer_period = 0.5  # seconds
+        self.timer = self.create_timer(timer_period, self.timer_control_callback)
+
         #Action client 
         #Check the correct action name and msg type from John's code
         self.action_client = ActionClient(self, MoveStage, '/move_stage')
 
+        self.cmd = np.zeros((3,1))
         self.i=0
 
 
@@ -53,8 +59,8 @@ class ControllerNode(Node):
     def send_cmd(self, x, z):
 
         goal_msg = MoveStage.Goal()
-        goal_msg.x = x
-        goal_msg.z = z
+        goal_msg.x = self.cmd.x
+        goal_msg.z = self.cmd.z
         goal_msg.eps = 0.0
 
         self.get_logger().info('Waiting for action server...')
@@ -89,6 +95,16 @@ class ControllerNode(Node):
         else:
             self.get_logger().info('Goal failed with status: {0}'.format(status))
 
+    # Publish current control signal
+    def timer_control_callback(self):
+
+        msg = PointStamped()
+        msg.point.x = self.cmd[0,0]
+        msg.point.z = self.cmd[2,0]
+        msg.header.stamp = self.get_clock().now().to_msg()
+
+        self.publisher_control.publish(msg)
+        self.get_logger().info('Publish - Control cmd: %s' %  self.cmd)
 
 def main(args=None):
     rclpy.init(args=args)
