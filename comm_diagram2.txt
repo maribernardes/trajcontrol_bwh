@@ -1,0 +1,30 @@
+@startuml
+
+  participant UI
+  participant Aurora
+  participant PlusServer
+
+  Aurora -> PlusServer:
+
+  box trajcontrol
+    participant insertion
+    participant estimator
+    participant controller
+    participant filter
+    participant smarttemplate
+  end box
+
+  participant robot
+
+  insertion -> smarttemplate: stage/state/insertion
+  smarttemplate -> estimator: stage/state/needle_pose
+
+  PlusServer -> filter: /needle/state/shape
+  filter -> estimator: /needle/state/shape
+  controller -> smarttemplate: /move_stage
+
+  estimator -> controller: /needle/state/jacobian
+  UI -> controller: /subject/state/target
+  smarttemplate -> robot:
+
+@enduml
