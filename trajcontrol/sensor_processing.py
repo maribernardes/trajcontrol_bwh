@@ -91,6 +91,7 @@ def load_registration(self):
 
 ########################################################################
 ### Auxiliar functions ###
+########################################################################
 
 # Function: pose_transform
 # DO: Transform pose to new reference frame
@@ -115,6 +116,44 @@ def pose_transform(x_orig, x_tf):
 
     x_new = np.array([p_new.x, p_new.y, p_new.z, q_new.w, q_new.x, q_new.y, q_new.z])
     return x_new
+
+########################################################################
+# Function: find_registration
+# DO: From two sets of N 3D points in two different reference frames, find the best fit
+#       in the LS-sense for the transformation between them (translation and rotation in quaternion)
+# Inputs: 
+#   A: set of N 3D points in first frame (numpy array 3xN)
+#   B: set of N 3D points in second frame (numpy array 3xN)
+# Output:
+#   x_reg: transformation from first to second frame (numpy array [x, y, z, qw, qx, qy, qz])
+def find_registration(A, B):
+    [d, n] = np.shape(A)
+
+    #Mean Center Data
+    Ac = np.mean(A.T,axis=0)
+    Bc = np.mean(B.T,axis=0)
+    A = A - np.matlib.repmat(Ac[:,None], 1, n)
+    B = B - np.matlib.repmat(Bc[:,None], 1, n)
+
+    #Calculate Optimal Rotation
+    M = np.matmul(A, B.T)
+    N = np.array([[M[0,0]+M[1,1]+M[2,2], M[1,2]-M[2,1],        M[2,0]-M[0,2],        M[0,1]-M[1,0]],\
+                [M[1,2]-M[2,1],        M[0,0]-M[1,1]-M[2,2], M[0,1]+M[1,0],        M[2,0]+M[0,2]],\
+                [M[2,0]-M[0,2],        M[0,1]+M[1,0],        M[1,1]-M[0,0]-M[2,2], M[1,2]+M[2,1]],\
+                [M[0,1]-M[1,0],        M[2,0]+M[0,2],        M[1,2]+M[2,1],        M[2,2]-M[0,0]-M[1,1]]])
+    [w,v]=np.linalg.eig(N)
+    ind=np.argmax(w)
+    q = v[:,ind]                                                                #Rotation quaternion
+    R = (q[0]**2-np.inner(q[1:4],q[1:4]))*np.eye(3) + 2*np.outer(q[1:4],q[1:4]) + \
+        2*q[0]*np.array([[0,-q[3],q[2]],[q[3],0,-q[1]],[-q[2],q[1],0]])         #Rotation matrix
+
+    #Calculate Optimal Translation
+    t = Bc - np.matmul(R,Ac)
+
+    x_reg = [t[0], t[1], t[2], q[0], q[1], q[2], q[3]] #final registration transform
+    return x_reg
+
+########################################################################
 
 def main(args=None):
     rclpy.init(args=args)
