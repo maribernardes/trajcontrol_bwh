@@ -91,6 +91,7 @@ def load_registration(self):
 
 ########################################################################
 ### Auxiliar functions ###
+########################################################################
 
 # Function: pose_transform
 # DO: Transform pose to new reference frame
@@ -116,8 +117,9 @@ def pose_transform(x_orig, x_tf):
     x_new = np.array([p_new.x, p_new.y, p_new.z, q_new.w, q_new.x, q_new.y, q_new.z])
     return x_new
 
+########################################################################
 # Function: find_registration
-# DO: From a set of N 3D points in two different reference frames, find the best fit
+# DO: From two sets of N 3D points in two different reference frames, find the best fit
 #       in the LS-sense for the transformation between them (translation and rotation in quaternion)
 # Inputs: 
 #   A: set of N 3D points in first frame (numpy array 3xN)
@@ -150,6 +152,8 @@ def find_registration(A, B):
 
     x_reg = [t[0], t[1], t[2], q[0], q[1], q[2], q[3]] #final registration transform
     return x_reg
+
+########################################################################
 
 def main(args=None):
     rclpy.init(args=args)
