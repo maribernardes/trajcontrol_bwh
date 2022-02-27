@@ -34,6 +34,7 @@ setup(
             'controller_node = trajcontrol.controller_node:main',
             'save_file = trajcontrol.save_file:main',
             'insertion_node = trajcontrol.insertion_node:main',
+            'registration = trajcontrol.registration:main',
         ],
     },
 )
