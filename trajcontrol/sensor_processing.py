@@ -1,11 +1,9 @@
-import os
 import rclpy
 import numpy as np
-import quaternion
 
 from rclpy.node import Node
-from numpy import asarray, savetxt, loadtxt
 from ros2_igtl_bridge.msg import Transform
+from trajcontrol_interfaces.srv import GetPose
 from geometry_msgs.msg import PoseStamped, Point, Quaternion
 from scipy.ndimage import median_filter
 
@@ -13,81 +11,62 @@ class SensorProcessing(Node):
 
     def __init__(self):
         super().__init__('sensor_processing')
-
-        #Declare node parameters
-        self.declare_parameter('registration') # Registration parameter
         
-        #Initialize registration transformation
-        if(self.get_parameter('registration').get_parameter_value().integer_value == 1):
-            registration(self)
-        else:
-            load_registration(self)
-
         #Topics from Aurora sensor node
         self.subscription_sensor = self.create_subscription(Transform, 'IGTL_TRANSFORM_IN', self.aurora_callback, 10)
         self.subscription_sensor # prevent unused variable warning
 
+        #Service call from registration node
+        self.cli = self.create_client(GetPose, '/needle/stage_registration')
+        while not self.cli.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Registration service not available, waiting again...')
+        self.req = GetPose.Request()
+
+        self.get_logger().info('Waiting service for loading registration transform')
+        self.future = self.cli.call_async(self.req) # Make asynchonous call for service
+
         #Published topics
         self.publisher_filtered = self.create_publisher(PoseStamped, '/needle/state/pose_filtered', 10)
 
-        self.i=0
+        #Stored values
+        self.registration = np.empty(shape=[0,7])
+        self.Z_sensor = np.empty(shape=[0,7])
         self.aurora = np.empty(shape=[0,7])         # Aurora readings as they are sent
         self.Z = np.empty(shape=[0,7])              # Filtered data in robot frame
     
+
     # Get current Aurora sensor measurements
     def aurora_callback(self, msg_sensor):
         # Get needle shape from Aurora IGTL
         name = msg_sensor.name      
         if name=="NeedleToTracker": # Name is adjusted in Plus .xml
-            # Save aurora new reading
-            Z_sensor = np.array([[msg_sensor.transform.translation.x, msg_sensor.transform.translation.y, msg_sensor.transform.translation.z, \
+            # Get aurora new reading
+            self.Z_sensor = np.array([[msg_sensor.transform.translation.x, msg_sensor.transform.translation.y, msg_sensor.transform.translation.z, \
                 msg_sensor.transform.rotation.w, msg_sensor.transform.rotation.x, msg_sensor.transform.rotation.y, msg_sensor.transform.rotation.z]])
-            self.aurora = np.row_stack((self.aurora, Z_sensor))
 
-            self.i += 1
-            #self.get_logger().info('Sample #%i: Z = %s in aurora frame' % (self.i, Z_sensor))
+            # Filter and transform Aurora data only after registration was performed or loaded from file
+            if len(self.registration) != 0: 
+                self.aurora = np.row_stack((self.aurora, self.Z_sensor))
+                self.get_logger().info('Sample Z = %s in aurora frame' % (Z_sensor))
 
-            # Smooth the measurements with a median filter 
-            n = self.aurora.shape[0]
-            size_win = min(n, 500) #array window size
-            if (size_win>0): 
-                Z_filt = median_filter(self.aurora[n-size_win:n,:], size=(40,1)) # use 40 samples median filter (column-wise)
-                Z_sensor = Z_filt[size_win-1,:]                                  # get last value
-                        
-            # Transform from sensor to robot frame
-            self.Z = pose_transform(Z_sensor, self.registration)
+                # Smooth the measurements with a median filter 
+                n = self.aurora.shape[0]
+                size_win = min(n, 500) #array window size
+                if (size_win>0): 
+                    Z_filt = median_filter(self.aurora[n-size_win:n,:], size=(40,1)) # use 40 samples median filter (column-wise)
+                    Z_sensor = Z_filt[size_win-1,:]                                  # get last value
+                            
+                # Transform from sensor to robot frame
+                self.Z = pose_transform(Z_sensor, self.registration)
+                
+                # Publish last needle filtered pose in robot frame
+                msg = PoseStamped()
+                # msg.header.stamp = msg_sensor.header.stamp # Use same timestamp from Aurora (Commented it out because Plus has no timestamp)
+                msg.header.frame_id = 'stage'
+                msg.pose.position = Point(x=self.Z[0], y=self.Z[1], z=self.Z[2])
+                msg.pose.orientation = Quaternion(w=self.Z[3], x=self.Z[4], y=self.Z[5], z=self.Z[6])
+                self.publisher_filtered.publish(msg)
             
-            # Publish last needle filtered pose in robot frame
-            msg = PoseStamped()
-            # msg.header.stamp = msg_sensor.header.stamp # Use same timestamp from Aurora (Commented it out because Plus has no timestamp)
-            msg.header.frame_id = 'stage'
-            msg.pose.position = Point(x=self.Z[0], y=self.Z[1], z=self.Z[2])
-            msg.pose.orientation = Quaternion(w=self.Z[3], x=self.Z[4], y=self.Z[5], z=self.Z[6])
-            self.publisher_filtered.publish(msg)
-
-def registration(self):
-    self.get_logger().info('=== Registration Procedure ===')
-
-    ##########################################
-    # TODO: Registration procedure
-    ##########################################
-    self.registration = np.array([0,0,0, 1.0,0,0,0])
-    self.get_logger().info('Registration transform ... \n registration = %s' %  (self.registration))
-
-    ##########################################
-    # Save matrix to file
-    savetxt(os.path.join('src','trajcontrol','files','registration.csv'), asarray(self.registration), delimiter=',')
-
-def load_registration(self):
-    self.get_logger().info('Use previous registration')
-    try:
-        self.registration = loadtxt(os.path.join('src','trajcontrol','files','registration.csv'), delimiter=',')
-
-    except IOError:
-        self.get_logger().info('Could not find registration.csv file - Starting new registration now...')
-        registration(self)
-    
-    self.get_logger().info('Loading stored registration transform ... \n registration = %s' %  (self.registration))
 
 ########################################################################
 ### Auxiliar functions ###
@@ -118,50 +97,27 @@ def pose_transform(x_orig, x_tf):
     return x_new
 
 ########################################################################
-# Function: find_registration
-# DO: From two sets of N 3D points in two different reference frames, find the best fit
-#       in the LS-sense for the transformation between them (translation and rotation in quaternion)
-# Inputs: 
-#   A: set of N 3D points in first frame (numpy array 3xN)
-#   B: set of N 3D points in second frame (numpy array 3xN)
-# Output:
-#   x_reg: transformation from first to second frame (numpy array [x, y, z, qw, qx, qy, qz])
-def find_registration(A, B):
-    [d, n] = np.shape(A)
-
-    #Mean Center Data
-    Ac = np.mean(A.T,axis=0)
-    Bc = np.mean(B.T,axis=0)
-    A = A - np.matlib.repmat(Ac[:,None], 1, n)
-    B = B - np.matlib.repmat(Bc[:,None], 1, n)
-
-    #Calculate Optimal Rotation
-    M = np.matmul(A, B.T)
-    N = np.array([[M[0,0]+M[1,1]+M[2,2], M[1,2]-M[2,1],        M[2,0]-M[0,2],        M[0,1]-M[1,0]],\
-                [M[1,2]-M[2,1],        M[0,0]-M[1,1]-M[2,2], M[0,1]+M[1,0],        M[2,0]+M[0,2]],\
-                [M[2,0]-M[0,2],        M[0,1]+M[1,0],        M[1,1]-M[0,0]-M[2,2], M[1,2]+M[2,1]],\
-                [M[0,1]-M[1,0],        M[2,0]+M[0,2],        M[1,2]+M[2,1],        M[2,2]-M[0,0]-M[1,1]]])
-    [w,v]=np.linalg.eig(N)
-    ind=np.argmax(w)
-    q = v[:,ind]                                                                #Rotation quaternion
-    R = (q[0]**2-np.inner(q[1:4],q[1:4]))*np.eye(3) + 2*np.outer(q[1:4],q[1:4]) + \
-        2*q[0]*np.array([[0,-q[3],q[2]],[q[3],0,-q[1]],[-q[2],q[1],0]])         #Rotation matrix
-
-    #Calculate Optimal Translation
-    t = Bc - np.matmul(R,Ac)
-
-    x_reg = [t[0], t[1], t[2], q[0], q[1], q[2], q[3]] #final registration transform
-    return x_reg
-
-########################################################################
 
 def main(args=None):
     rclpy.init(args=args)
 
     sensor_processing = SensorProcessing()
 
-    rclpy.spin(sensor_processing)
+    while rclpy.ok():
+        rclpy.spin_once(sensor_processing)
+        if sensor_processing.future.done():
+            try:
+                 response = sensor_processing.future.result()
+            except Exception as e:
+                sensor_processing.get_logger().info(
+                    'Service call failed %r' % (e,))
+            else:
+                sensor_processing.registration = np.array([response.x, response.y, response.z, response.qw, response.qx, response.qy, response.qz])
+                sensor_processing.get_logger().info('Registration transform ... \n registration = %s' %  (sensor_processing.registration))
+            break
 
+    rclpy.spin(sensor_processing)
+    
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
     # when the garbage collector destroys the node object)

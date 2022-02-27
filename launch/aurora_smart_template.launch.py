@@ -29,7 +29,6 @@ def generate_launch_description():
     sensor = Node(
         package = "trajcontrol",
         executable = "sensor_processing",
-        parameters=[{"registration":LaunchConfiguration('registration')}]
     )
 
     robot = Node(
@@ -61,16 +60,10 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument(
-            "registration",
-            default_value="0",
-            description="Registration: 0 - Use previous registration, 1 - Make new registration"
-        ),
-        DeclareLaunchArgument(
             "filename",
             default_value="my_data",
             description="File name to save .csv file with experimental data"
         ),
-        actions.LogInfo(msg=["registration: ", LaunchConfiguration('registration')]),
         actions.LogInfo(msg=["filename: ", LaunchConfiguration('filename')]),
         aurora,
         sensor,
