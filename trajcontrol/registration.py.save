@@ -4,7 +4,6 @@ import numpy as np
 import numpy.matlib 
 import quaternion
 import keyboard
-import time
 
 from rclpy.node import Node
 from numpy import asarray, savetxt, loadtxt
@@ -34,14 +33,7 @@ class Registration(Node):
         
         #Testing for non-blocking keyboard 
         timer_period = 0.5  # seconds
-#        self.timer = self.create_timer(timer_period, self.timer_callback)
-
-        self.loop = True
-
-        keyboard.on_press_key('p', self.get_points)
-
-    def get_points(self,event):
-        self.loop = False
+        self.timer = self.create_timer(timer_period, self.timer_callback)
 
     def timer_callback(self):
         self.get_logger().info('The keyboard is NOT blocking the node 2')
@@ -54,8 +46,8 @@ class Registration(Node):
             # Get aurora new reading
             self.Z_sensor = np.array([[msg_sensor.transform.translation.x, msg_sensor.transform.translation.y, msg_sensor.transform.translation.z, \
                 msg_sensor.transform.rotation.w, msg_sensor.transform.rotation.x, msg_sensor.transform.rotation.y, msg_sensor.transform.rotation.z]])
-        self.get_logger().info("test:")
-        
+        print("test:")
+        print(self.Z_sensor)
 
 
     # Get registration transform
@@ -73,10 +65,10 @@ class Registration(Node):
             # Get all registration points
             i = 1
             while (A.shape[1] < B.shape[1]):  
-                self.get_logger().info('Please, place the sensor at Registration Point #%i and press key p' % (i))
-                self.loop = True
-                while self.loop: 
-                    time.sleep(0.5)
+                self.get_logger().info('Please, place the sensor at Registration Point #%i and press key p'self.get_logger().info( % (i))
+                loop = True
+                while loop: 
+                    print("waiting...")
                 #keyboard.wait('p')
                 if len(self.Z_sensor)==0: #No points stored
                     self.get_logger().info('There is no sensor reading to store')

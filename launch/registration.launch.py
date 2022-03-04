@@ -16,7 +16,6 @@ def generate_launch_description():
         parameters=[{"registration":LaunchConfiguration('registration')}]
     )
 
-
     return LaunchDescription([
         DeclareLaunchArgument(
             "registration",
