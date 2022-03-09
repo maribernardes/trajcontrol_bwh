@@ -29,6 +29,7 @@ def generate_launch_description():
     sensor = Node(
         package = "trajcontrol",
         executable = "sensor_processing",
+        parameters=[{"registration":LaunchConfiguration('registration')}]
     )
 
     robot = Node(
