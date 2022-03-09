@@ -45,11 +45,13 @@ class SensorProcessing(Node):
         self.aurora = np.empty(shape=[0,7])         # All stored Aurora readings as they are sent
         self.Z_sensor = np.empty(shape=[0,7])       # Aurora values as they are sent
         self.Z = np.empty(shape=[0,7])              # Filtered aurora data in robot frame
+        #self.Z_sensor = np.array([[1, 2, 3]])       # REMOVE AFTER TESTS
 
     # Get current Aurora sensor measurements
     def aurora_callback(self, msg_sensor):
         # Get needle shape from Aurora IGTL
         name = msg_sensor.name      
+        #self.get_logger().info('Aurora callback') # REMOVE AFTER TESTS
         if name=="NeedleToTracker": # Name is adjusted in Plus .xml
             # Get aurora new reading
             self.Z_sensor = np.array([[msg_sensor.transform.translation.x, msg_sensor.transform.translation.y, msg_sensor.transform.translation.z, \
@@ -58,7 +60,7 @@ class SensorProcessing(Node):
             # Filter and transform Aurora data only after registration was performed or loaded from file
             if len(self.registration) != 0: 
                 self.aurora = np.row_stack((self.aurora, self.Z_sensor))
-                self.get_logger().info('Sample Z = %s in aurora frame' % (Z_sensor))
+                self.get_logger().info('Sample Z = %s in aurora frame' % (self.Z_sensor))
 
                 # Smooth the measurements with a median filter 
                 n = self.aurora.shape[0]
@@ -79,31 +81,22 @@ class SensorProcessing(Node):
                 self.publisher_filtered.publish(msg)
     
     def get_point(self,event):
-        self.keyboard_loop = False
+        if len(self.Z_sensor)==0: #No points stored
+            self.get_logger().info('There is no sensor reading to store')
+        else:
+            P = self.Z_sensor[0,0:3]
+            self.get_logger().info('Stored Point #%i = %s' % (self.point_count, P.T))
+            self.A = np.column_stack((self.A, P.T))
+            self.point_count += 1
 
     def get_registration(self):    
         # Check if should make registration or load previous transform
         if(self.get_parameter('registration').get_parameter_value().integer_value == 1): # Calculate new registration transform
-            if (self.point_count == 1):
-                self.get_logger().info('=== Starting Registration Procedure ===')
-            
+                     
             # Get points until A is same size as B
             if (self.A.shape[1] < self.B.shape[1]):  
                 self.get_logger().info('Please, place the sensor at Registration Point #%i and press ENTER' % (self.point_count))
-                
-                # Wait for key event
-                self.keyboard_loop = True
-                while self.keyboard_loop: 
-                    time.sleep(0.5)
-                
-                if len(self.Z_sensor)==0: #No points stored
-                    self.get_logger().info('There is no sensor reading to store')
-                else:
-                    P = self.Z_sensor[0,0:3]
-                    self.get_logger().info('Stored Point #%i = %s' % (self.point_count, P.T))
-                    self.A = np.column_stack((self.A, P.T))
-                    self.point_count += 1
-
+                time.sleep(0.5) #Not sure if necessary
             else:
                 # Calculate registration transform
                 self.registration = find_registration(self.A, self.B)   #Store registration transform
