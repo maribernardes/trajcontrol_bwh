@@ -27,6 +27,13 @@ class SensorProcessing(Node):
         #Published topics
         self.publisher_filtered = self.create_publisher(PoseStamped, '/needle/state/pose_filtered', 10)
 
+        #Stored values
+        self.registration = np.empty(shape=[0,7])   # Registration transform (from aurora to stage)
+        self.aurora = np.empty(shape=[0,7])         # All stored Aurora readings as they are sent
+        self.Z_sensor = np.empty(shape=[0,7])       # Aurora values as they are sent
+        self.Z = np.empty(shape=[0,7])              # Filtered aurora data in robot frame
+        self.Z_sensor = np.array([[1, 2, 3]])       # REMOVE AFTER TESTS
+
         # Registration points A (aurora) and B (stage)
         ###############################################################################
         ### TODO: Define B: Registration points in the stage frame                  ###
@@ -37,21 +44,13 @@ class SensorProcessing(Node):
         self.point_count = 1
 
         #Get events from keyboard
-        self.keyboard_loop = True
         keyboard.on_press_key('return', self.get_point)
-
-        #Stored values
-        self.registration = np.empty(shape=[0,7])   # Registration transform (from aurora to stage)
-        self.aurora = np.empty(shape=[0,7])         # All stored Aurora readings as they are sent
-        self.Z_sensor = np.empty(shape=[0,7])       # Aurora values as they are sent
-        self.Z = np.empty(shape=[0,7])              # Filtered aurora data in robot frame
-        #self.Z_sensor = np.array([[1, 2, 3]])       # REMOVE AFTER TESTS
 
     # Get current Aurora sensor measurements
     def aurora_callback(self, msg_sensor):
+        self.get_logger().info('Test callback') # REMOVE AFTER TESTS
         # Get needle shape from Aurora IGTL
         name = msg_sensor.name      
-        #self.get_logger().info('Aurora callback') # REMOVE AFTER TESTS
         if name=="NeedleToTracker": # Name is adjusted in Plus .xml
             # Get aurora new reading
             self.Z_sensor = np.array([[msg_sensor.transform.translation.x, msg_sensor.transform.translation.y, msg_sensor.transform.translation.z, \
@@ -92,22 +91,26 @@ class SensorProcessing(Node):
     def get_registration(self):    
         # Check if should make registration or load previous transform
         if(self.get_parameter('registration').get_parameter_value().integer_value == 1): # Calculate new registration transform
-                     
+
+
+
             # Get points until A is same size as B
             if (self.A.shape[1] < self.B.shape[1]):  
                 self.get_logger().info('Please, place the sensor at Registration Point #%i and press ENTER' % (self.point_count))
-                time.sleep(0.5) #Not sure if necessary
+                #time.sleep(0.5) #Not sure if necessary
             else:
                 # Calculate registration transform
                 self.registration = find_registration(self.A, self.B)   #Store registration transform
-                keyboard.unhook_all()                                   #No more keyboard events
+                # Save matrix to file
+                savetxt(os.path.join(os.getcwd(),'files','registration.csv'), asarray(self.registration), delimiter=',')
+            
+                #No more keyboard events
+                keyboard.unhook_all()                                   
 
-            # Save matrix to file
-            savetxt(os.path.join('src','trajcontrol','files','registration.csv'), asarray(self.registration), delimiter=',')
         else:    # Load previous registration from file
             self.get_logger().info('Use previous registration')
             try:
-                self.registration = loadtxt(os.path.join('src','trajcontrol','files','registration.csv'), delimiter=',')
+                self.registration = loadtxt(os.path.join(os.getcwd(),'files','registration.csv'), delimiter=',')
 
             except IOError:
                 self.get_logger().info('Could not find registration.csv file')
@@ -187,7 +190,7 @@ def main(args=None):
     sensor_processing = SensorProcessing()
 
     while rclpy.ok():
-        rclpy.spin_once(sensor_processing, timeout_sec=0.5)
+        rclpy.spin_once(sensor_processing)
         if len(sensor_processing.registration) == 0: #No registration yet
             sensor_processing.get_registration()
         else:
