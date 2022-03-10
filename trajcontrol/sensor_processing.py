@@ -9,6 +9,7 @@ import quaternion
 from rclpy.node import Node
 from ros2_igtl_bridge.msg import Transform
 from numpy import asarray, savetxt, loadtxt
+from std_msgs.msg import Int8
 from geometry_msgs.msg import PoseStamped, Point, Quaternion
 from scipy.ndimage import median_filter
 
@@ -24,7 +25,12 @@ class SensorProcessing(Node):
         self.subscription_sensor = self.create_subscription(Transform, 'IGTL_TRANSFORM_IN', self.aurora_callback, 10)
         self.subscription_sensor # prevent unused variable warning
 
-        #Published topics
+        #Topic from keypress node
+        self.subscription_keyboard = self.create_subscription(Int8, '/keyboard/key', self.keyboard_callback, 10)
+        self.subscription_keyboard # prevent unused variable warning
+        self.listen_keyboard = False
+
+        # #Published topics
         self.publisher_filtered = self.create_publisher(PoseStamped, '/needle/state/pose_filtered', 10)
 
         #Stored values
@@ -32,23 +38,18 @@ class SensorProcessing(Node):
         self.aurora = np.empty(shape=[0,7])         # All stored Aurora readings as they are sent
         self.Z_sensor = np.empty(shape=[0,7])       # Aurora values as they are sent
         self.Z = np.empty(shape=[0,7])              # Filtered aurora data in robot frame
-        self.Z_sensor = np.array([[1, 2, 3]])       # REMOVE AFTER TESTS
 
         # Registration points A (aurora) and B (stage)
         ###############################################################################
         ### TODO: Define B: Registration points in the stage frame                  ###
         ### B = np.array([[x0, x1, ..., xn], [y0, y1, ..., yn], [z0, z1, ..., zn]]) ###
         ###############################################################################
-        self.A = np.empty(shape=[3,0])               # registration points in aurora frame
-        self.B = np.array([[1, 2], [1, 2], [1, 2]])  # registration points in stage frame
-        self.point_count = 1
-
-        #Get events from keyboard
-        keyboard.on_press_key('return', self.get_point)
+        self.A = np.empty(shape=[3,0])                  # registration points in aurora frame
+        self.B = np.array([[1, 2], [1, 2], [1, 2]])     # registration points in stage frame
+        self.request_point = np.zeros(self.B.shape[1])  # request for registration point input (1 = already requested / 0 = to be requested)
 
     # Get current Aurora sensor measurements
     def aurora_callback(self, msg_sensor):
-        self.get_logger().info('Test callback') # REMOVE AFTER TESTS
         # Get needle shape from Aurora IGTL
         name = msg_sensor.name      
         if name=="NeedleToTracker": # Name is adjusted in Plus .xml
@@ -79,38 +80,40 @@ class SensorProcessing(Node):
                 msg.pose.orientation = Quaternion(w=self.Z[3], x=self.Z[4], y=self.Z[5], z=self.Z[6])
                 self.publisher_filtered.publish(msg)
     
-    def get_point(self,event):
+    # Get keyboard pressed key 
+    def keyboard_callback(self, msg):
+        # if (self.listen_keyboard == True) and (msg.data == 10): # if key is ENTER
         if len(self.Z_sensor)==0: #No points stored
             self.get_logger().info('There is no sensor reading to store')
         else:
             P = self.Z_sensor[0,0:3]
-            self.get_logger().info('Stored Point #%i = %s' % (self.point_count, P.T))
+            self.get_logger().info('Stored Point #%i = %s' % (self.A.shape[1]+1, P.T))
             self.A = np.column_stack((self.A, P.T))
-            self.point_count += 1
 
     def get_registration(self):    
         # Check if should make registration or load previous transform
         if(self.get_parameter('registration').get_parameter_value().integer_value == 1): # Calculate new registration transform
 
-
-
             # Get points until A is same size as B
-            if (self.A.shape[1] < self.B.shape[1]):  
-                self.get_logger().info('Please, place the sensor at Registration Point #%i and press ENTER' % (self.point_count))
-                #time.sleep(0.5) #Not sure if necessary
+            if (self.A.shape[1] < self.B.shape[1]): 
+                #Listen to keyboard
+                self.listen_keyboard = True         
+                if (self.request_point[self.A.shape[1]] == 0): # Print request message only once    
+                    self.request_point[self.A.shape[1]] = 1
+                    self.get_logger().info('Please, place the sensor at Registration Point #%i and press ENTER' % (self.A.shape[1]+1))
+                time.sleep(0.5) #Not sure if necessary
+                #No more keyboard events
+                self.listen_keyboard = False              
             else:
                 # Calculate registration transform
                 self.registration = find_registration(self.A, self.B)   #Store registration transform
                 # Save matrix to file
-                savetxt(os.path.join(os.getcwd(),'files','registration.csv'), asarray(self.registration), delimiter=',')
-            
-                #No more keyboard events
-                keyboard.unhook_all()                                   
+                savetxt(os.path.join(os.getcwd(),'src','trajcontrol','files','registration.csv'), asarray(self.registration), delimiter=',')                              
 
         else:    # Load previous registration from file
             self.get_logger().info('Use previous registration')
             try:
-                self.registration = loadtxt(os.path.join(os.getcwd(),'files','registration.csv'), delimiter=',')
+                self.registration = loadtxt(os.path.join(os.getcwd(),'src','trajcontrol','files','registration.csv'), delimiter=',')
 
             except IOError:
                 self.get_logger().info('Could not find registration.csv file')
