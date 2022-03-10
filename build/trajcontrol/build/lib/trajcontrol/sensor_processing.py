@@ -45,7 +45,7 @@ class SensorProcessing(Node):
         ### B = np.array([[x0, x1, ..., xn], [y0, y1, ..., yn], [z0, z1, ..., zn]]) ###
         ###############################################################################
         self.A = np.empty(shape=[3,0])                  # registration points in aurora frame
-        self.B = np.array([[20, 20, 5, 20, 20, 5], [0, 15, 15, 0, 15, 15], [0, 0, 0, 22.3, 22.3, 22.3]])     # registration points in stage frame
+        self.B = np.array([[20, 20, 5, 20, 20, 5], [0, 15, 15, 0, 15, 15], [0, 0, 0, -22.3, -22.3, -22.3]])     # registration points in stage frame
         self.request_point = np.zeros(self.B.shape[1])  # request for registration point input (1 = already requested / 0 = to be requested)
 
     # Get current Aurora sensor measurements
@@ -97,6 +97,7 @@ class SensorProcessing(Node):
 
             # Get points until A is same size as B
             if (self.A.shape[1] < self.B.shape[1]): 
+                self.get_logger().info('A size =%s B size = %s' % (self.A.shape[1], self.B.shape[1]))
                 #Listen to keyboard
                 self.listen_keyboard = True         
                 if (self.request_point[self.A.shape[1]] == 0): # Print request message only once    
