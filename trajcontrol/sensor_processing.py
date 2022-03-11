@@ -33,11 +33,17 @@ class SensorProcessing(Node):
         # #Published topics
         self.publisher_filtered = self.create_publisher(PoseStamped, '/needle/state/pose_filtered', 10)
 
+        self.publisher_entry_point = self.create_publisher(PoseStamped, '/subject/state/skin_entry', 10)
+        timer_period = 0.5  # seconds
+        self.timer = self.create_timer(timer_period, self.timer_entry_point_callback)
+
+
         #Stored values
         self.registration = np.empty(shape=[0,7])   # Registration transform (from aurora to stage)
         self.aurora = np.empty(shape=[0,7])         # All stored Aurora readings as they are sent
         self.Z_sensor = np.empty(shape=[0,7])       # Aurora values as they are sent
         self.Z = np.empty(shape=[0,7])              # Filtered aurora data in robot frame
+        self.entry_point = np.empty(shape=[0,7])    # Tip position at begining of insertion
 
         # Registration points A (aurora) and B (stage)
         ###############################################################################
@@ -46,7 +52,18 @@ class SensorProcessing(Node):
         ###############################################################################
         self.A = np.empty(shape=[3,0])                  # registration points in aurora frame
         self.B = np.array([[20, 20, 5, 20, 20, 5], [0, 15, 15, 0, 15, 15], [0, 0, 0, 22.3, 22.3, 22.3]])     # registration points in stage frame
-        self.request_point = np.zeros(self.B.shape[1])  # request for registration point input (1 = already requested / 0 = to be requested)
+        self.keyboard_request = np.zeros(self.B.shape[1]+1)  # requests for key pressing (1 = already requested / 0 = to be requested). Quantity: #registration points + entry point
+
+    def timer_entry_point_callback(self):
+        # Publishes oly after experiment started (stored entry point is available)
+        if len(self.entry_point) != 0:
+            msg = PoseStamped()
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.header.frame_id = "stage"
+            msg.pose.position.x = self.entry_point[0]
+            msg.pose.position.y = self.entry_point[1]
+            msg.pose.position.z = self.entry_point[2]
+            self.publisher_entry_point.publish(msg)
 
     # Get current Aurora sensor measurements
     def aurora_callback(self, msg_sensor):
@@ -60,7 +77,6 @@ class SensorProcessing(Node):
             # Filter and transform Aurora data only after registration was performed or loaded from file
             if len(self.registration) != 0: 
                 self.aurora = np.row_stack((self.aurora, self.Z_sensor))
-                self.get_logger().info('Sample Z = %s in aurora frame' % (self.Z_sensor))
 
                 # Smooth the measurements with a median filter 
                 n = self.aurora.shape[0]
@@ -71,7 +87,8 @@ class SensorProcessing(Node):
                             
                 # Transform from sensor to robot frame
                 self.Z = pose_transform(Z_sensor, self.registration)
-                self.get_logger().info('Sample Z = %s in stage frame' % (self.Z))
+                if len(self.entry_point) != 0: # Only print after experiment begins
+                    self.get_logger().info('Sample Z = %s in stage frame' % (self.Z))
                 
                 # Publish last needle filtered pose in robot frame
                 msg = PoseStamped()
@@ -81,15 +98,20 @@ class SensorProcessing(Node):
                 msg.pose.orientation = Quaternion(w=self.Z[3], x=self.Z[4], y=self.Z[5], z=self.Z[6])
                 self.publisher_filtered.publish(msg)
     
-    # Get keyboard pressed key 
+    # A keyboard hotkey was pressed 
     def keyboard_callback(self, msg):
-        # if (self.listen_keyboard == True) and (msg.data == 10): # if key is ENTER
-        if len(self.Z_sensor)==0: #No points stored
-            self.get_logger().info('There is no sensor reading to store')
-        else:
-            P = self.Z_sensor[0,0:3]
-            self.get_logger().info('Stored Point #%i = %s' % (self.A.shape[1]+1, P.T))
-            self.A = np.column_stack((self.A, P.T))
+        if (msg.data == 10) and (len(self.registration) == 0): # ENTER and missing registration
+            if len(self.Z_sensor)==0:   # No aurora reading to store
+                self.get_logger().info('There is no sensor reading to store')
+            else:
+                P = self.Z_sensor[0,0:3] # Store next registration point
+                self.get_logger().info('Stored Point #%i = %s' % (self.A.shape[1]+1, P.T))
+                self.A = np.column_stack((self.A, P.T))
+        elif (msg.data == 32) and (len(self.entry_point) == 0): # SPACE and missing entry point
+            if len(self.Z)==0:   # No filtered sensor reading to store
+                self.get_logger().info('There is no sensor reading to store')
+            else:
+                self.entry_point = self.Z #Store entry point
 
     def get_registration(self):    
         # Check if should make registration or load previous transform
@@ -99,10 +121,10 @@ class SensorProcessing(Node):
             if (self.A.shape[1] < self.B.shape[1]): 
                 #Listen to keyboard
                 self.listen_keyboard = True         
-                if (self.request_point[self.A.shape[1]] == 0): # Print request message only once    
-                    self.request_point[self.A.shape[1]] = 1
+                if (self.keyboard_request[self.A.shape[1]] == 0): # Print request message only once    
+                    self.keyboard_request[self.A.shape[1]] = 1
                     self.get_logger().info('Please, place the sensor at Registration Point #%i and press ENTER' % (self.A.shape[1]+1))
-                time.sleep(0.5) #Not sure if necessary
+                time.sleep(0.5) 
                 #No more keyboard events
                 self.listen_keyboard = False              
             else:
@@ -112,7 +134,7 @@ class SensorProcessing(Node):
                 savetxt(os.path.join(os.getcwd(),'src','trajcontrol','files','registration.csv'), asarray(self.registration), delimiter=',')                              
 
         else:    # Load previous registration from file
-            self.get_logger().info('Use previous registration')
+            self.get_logger().info('Loading stored registration transform ...')
             self.get_logger().info('path = %s' %(os.path.join(os.getcwd(),'src','trajcontrol','files','registration.csv')))
             try:
                 self.registration = loadtxt(os.path.join(os.getcwd(),'src','trajcontrol','files','registration.csv'), delimiter=',')
@@ -120,7 +142,17 @@ class SensorProcessing(Node):
             except IOError:
                 self.get_logger().info('Could not find registration.csv file')
             
-            self.get_logger().info('Loading stored registration transform ... \n registration = %s' %  (self.registration))
+    def get_entry_point(self):
+        # Get entry point if nothing was stored
+        if len(self.entry_point) == 0:
+            #Listen to keyboard
+            self.listen_keyboard = True         
+            if (self.keyboard_request[-1] == 0): # Print request message only once 
+                self.keyboard_request[-1] = 1
+                self.get_logger().info('Please, place the needle at the Entry Point and hit SPACE bar')
+            time.sleep(0.5) 
+            #No more keyboard events
+            self.listen_keyboard = False              
 
 ########################################################################
 ### Auxiliar functions ###
@@ -194,6 +226,7 @@ def main(args=None):
 
     sensor_processing = SensorProcessing()
 
+    # Initialize registration
     while rclpy.ok():
         rclpy.spin_once(sensor_processing)
         if len(sensor_processing.registration) == 0: #No registration yet
@@ -201,6 +234,17 @@ def main(args=None):
         else:
             sensor_processing.get_logger().info('Registration transform ... \n registration = %s' %  (sensor_processing.registration))
             break
+
+    # Initialize home position
+    while rclpy.ok():
+        rclpy.spin_once(sensor_processing)
+        if len(sensor_processing.entry_point) == 0: #No entry point yet
+            sensor_processing.get_entry_point()
+        else:
+            sensor_processing.get_logger().info('Entry point = %s' %  (sensor_processing.entry_point))
+            break
+
+
 
     rclpy.spin(sensor_processing)
     
