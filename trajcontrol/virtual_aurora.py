@@ -42,7 +42,7 @@ class VirtualAurora(Node):
             self.i += 1
 
         self.publisher.publish(msg)
-        self.get_logger().info('Tip Position = [%f, %f, %f] ' % (msg.transform.translation.x,msg.transform.translation.y,msg.transform.translation.z))
+        #self.get_logger().info('Tip Position = [%f, %f, %f] ' % (msg.transform.translation.x,msg.transform.translation.y,msg.transform.translation.z))
 
 def main(args=None):
     rclpy.init(args=args)

@@ -47,7 +47,7 @@ class SensorProcessing(Node):
 
         # Registration points A (aurora) and B (stage)
         ###############################################################################
-        ### TODO: Define B: Registration points in the stage frame                  ###
+        ### ATTENTION: Define B: Registration points in the stage frame             ###
         ### B = np.array([[x0, x1, ..., xn], [y0, y1, ..., yn], [z0, z1, ..., zn]]) ###
         ###############################################################################
         self.A = np.empty(shape=[3,0])                  # registration points in aurora frame
@@ -55,7 +55,7 @@ class SensorProcessing(Node):
         self.keyboard_request = np.zeros(self.B.shape[1]+1)  # requests for key pressing (1 = already requested / 0 = to be requested). Quantity: #registration points + entry point
 
     def timer_entry_point_callback(self):
-        # Publishes oly after experiment started (stored entry point is available)
+        # Publishes only after experiment started (stored entry point is available)
         if len(self.entry_point) != 0:
             msg = PoseStamped()
             msg.header.stamp = self.get_clock().now().to_msg()
@@ -63,6 +63,10 @@ class SensorProcessing(Node):
             msg.pose.position.x = self.entry_point[0]
             msg.pose.position.y = self.entry_point[1]
             msg.pose.position.z = self.entry_point[2]
+            msg.pose.orientation.w = self.entry_point[3]
+            msg.pose.orientation.x = self.entry_point[3]
+            msg.pose.orientation.y = self.entry_point[3]
+            msg.pose.orientation.z = self.entry_point[3]
             self.publisher_entry_point.publish(msg)
 
     # Get current Aurora sensor measurements
@@ -87,8 +91,8 @@ class SensorProcessing(Node):
                             
                 # Transform from sensor to robot frame
                 self.Z = pose_transform(Z_sensor, self.registration)
-                if len(self.entry_point) != 0: # Only print after experiment begins
-                    self.get_logger().info('Sample Z = %s in stage frame' % (self.Z))
+                # if len(self.entry_point) != 0: # Only print after experiment begins
+                #     self.get_logger().info('Sample Z = %s in stage frame' % (self.Z))
                 
                 # Publish last needle filtered pose in robot frame
                 msg = PoseStamped()
@@ -135,7 +139,6 @@ class SensorProcessing(Node):
 
         else:    # Load previous registration from file
             self.get_logger().info('Loading stored registration transform ...')
-            self.get_logger().info('path = %s' %(os.path.join(os.getcwd(),'src','trajcontrol','files','registration.csv')))
             try:
                 self.registration = loadtxt(os.path.join(os.getcwd(),'src','trajcontrol','files','registration.csv'), delimiter=',')
 
@@ -232,10 +235,10 @@ def main(args=None):
         if len(sensor_processing.registration) == 0: #No registration yet
             sensor_processing.get_registration()
         else:
-            sensor_processing.get_logger().info('Registration transform ... \n registration = %s' %  (sensor_processing.registration))
+            sensor_processing.get_logger().info('Registration = %s' %  (sensor_processing.registration))
             break
 
-    # Initialize home position
+    # Initialize entry point position
     while rclpy.ok():
         rclpy.spin_once(sensor_processing)
         if len(sensor_processing.entry_point) == 0: #No entry point yet
