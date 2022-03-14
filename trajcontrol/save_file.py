@@ -19,11 +19,7 @@ class SaveFile(Node):
         
         #Declare node parameters
         self.declare_parameter('filename', 'my_data') #Name of file where data values are saved
-        self.filename = os.path.join('src','trajcontrol','data',self.get_parameter('filename').get_parameter_value().string_value + '.csv') #String with full path to file
-
-        #Topics from UI node
-        self.subscription_UI = self.create_subscription(PoseStamped, '/subject/state/skin_entry', self.entry_point_callback, 10)
-        self.subscription_UI  # prevent unused variable warning
+        self.filename = os.path.join(os.getcwd(),'src','trajcontrol','data',self.get_parameter('filename').get_parameter_value().string_value + '.csv') #String with full path to file
 
         #Topics from robot node
         self.subscription_robot = self.create_subscription(PoseStamped, '/stage/state/needle_pose', self.robot_callback, 10)
@@ -36,6 +32,8 @@ class SaveFile(Node):
         #Topics from sensor processing node
         self.subscription_sensor = self.create_subscription(PoseStamped, '/needle/state/pose_filtered', self.sensor_callback, 10)
         self.subscription_sensor # prevent unused variable warning
+        self.subscription_UI = self.create_subscription(PoseStamped, '/subject/state/skin_entry', self.entry_point_callback, 10)
+        self.subscription_UI  # prevent unused variable warning
 
         #Topics from estimator_node
         self.subscription_estimator = self.create_subscription(Image, '/needle/state/jacobian', self.estimator_callback, 10)
@@ -83,6 +81,7 @@ class SaveFile(Node):
                   0,0,0,0,0,0,0, \
                   0,0,0,0,0,0,0]    #jacobian matrix
         self.cmd = [0,0]
+        self.get_logger().info('Log data will be saved at %s' %(self.filename))   
 
     #Get current entry_point
     def entry_point_callback(self, msg):
@@ -99,13 +98,14 @@ class SaveFile(Node):
         sensor = msg.pose
         self.Z = [sensor.position.x, sensor.position.y, sensor.position.z, \
             sensor.orientation.w, sensor.orientation.x, sensor.orientation.y, sensor.orientation.z]
+        #self.get_logger().info('Received Z = %s in %s frame' % (self.Z, msg.header.frame_id))
 
     #Get current X
     def robot_callback(self, msg):
         robot = msg.pose
         self.X = [robot.position.x, robot.position.y, robot.position.z, \
             robot.orientation.w, robot.orientation.x, robot.orientation.y, robot.orientation.z]
-        self.get_logger().info('Received X = %s in robot frame' % (self.X))
+        #self.get_logger().info('Received X = %s in %s frame' % (self.X, msg.header.frame_id))
         
     #Get current J
     def estimator_callback(self,msg):
@@ -135,9 +135,7 @@ class SaveFile(Node):
         
         with open(self.filename, 'a', newline='', encoding='UTF8') as f: # open the file in append mode
             writer = csv.writer(f) # create the csv writer
-            writer.writerow(data)  # append a new row to the existing csv file
-        self.get_logger().info('saved file')        
-
+            writer.writerow(data)  # append a new row to the existing csv file     
 
 def main(args=None):
     rclpy.init(args=args)

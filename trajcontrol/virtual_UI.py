@@ -19,7 +19,6 @@ class VirtualUI(Node):
 
         self.i = 0
 
-
     def timer_skin_entry_callback(self):
         msg = PoseStamped()
         msg.header.stamp = self.get_clock().now().to_msg()

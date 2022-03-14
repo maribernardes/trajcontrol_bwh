@@ -61,13 +61,8 @@ class EstimatorNode(Node):
     # Get current entry point from UI node
     def entry_point_callback(self, msg):
         entry_point = msg.pose.position
-
-        ##########################################
-        # TODO: Transform entry_point from UI to robot frame
-        ##########################################
-
-        self.get_logger().info('Listening UI - Skin entry point: x=%f, y=%f, z=%f in %s frame'  % (entry_point.x, entry_point.y, \
-            entry_point.z, msg.header.frame_id))
+        #self.get_logger().info('Listening UI - Skin entry point: x=%f, y=%f, z=%f in %s frame'  % (entry_point.x, entry_point.y, \
+        #    entry_point.z, msg.header.frame_id))
 
     # Get current needle tip from sensor processing node
     # Z = [x_tip, y_tip, z_tip, q_tip] (Obs: for q, roll=pitch)
@@ -111,7 +106,7 @@ class EstimatorNode(Node):
         if (self.i > 0): #Does nothing if first sample (no deltas)
             self.J = self.J + alpha*np.matmul(((deltaZ-np.matmul(self.J, deltaX))/(np.matmul(np.transpose(deltaX), deltaX)+1e-9)), np.transpose(deltaX))
 
-        self.get_logger().info('Sample #%i: X = %s in robot frame' % (self.i, X.T))
+        # self.get_logger().info('Sample #%i: X = %s in %s frame' % (self.i, X.T, msg_robot.header.frame_id))
         self.i += 1
         
         # Publish new Jacobian
@@ -119,7 +114,7 @@ class EstimatorNode(Node):
         msg.header.stamp = self.get_clock().now().to_msg()
 
         self.publisher_jacobian.publish(msg)
-        self.get_logger().info('Publish - Jacobian: %s' %  self.J)
+        # self.get_logger().info('Publish - Jacobian: %s' %  self.J)
 
 ########################################################################
 ### Auxiliar functions ###
