@@ -100,7 +100,7 @@ class VirtualRobot(Node):
             # Update control input
             feedback_msg.x = float(k)
 
-            self.get_logger().info('Publishing feedback: {0}'.format(feedback_msg.x))
+            # self.get_logger().info('Publishing feedback: {0}'.format(feedback_msg.x))
 
             # Publish the feedback
             goal_handle.publish_feedback(feedback_msg)

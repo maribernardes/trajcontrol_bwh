@@ -17,13 +17,17 @@ class ControllerNode(Node):
         super().__init__('controller_node')
 
         #Declare node parameters
-        self.declare_parameter('K', 0.001) #Controller gain
+        self.declare_parameter('K', 0.01) #Controller gain
 
         #Topics from sensor processing node
         self.subscription_entry_point = self.create_subscription(PoseStamped, '/subject/state/skin_entry', self.entry_callback, 10)
         self.subscription_entry_point  # prevent unused variable warning
         self.subscription_tip = self.create_subscription(PoseStamped, '/needle/state/pose_filtered', self.tip_callback, 10)
         self.subscription_tip  # prevent unused variable warning
+
+        #Topics from robot node
+        self.subscription_robot = self.create_subscription(PoseStamped, '/stage/state/needle_pose', self.robot_callback, 10)
+        self.subscription_robot # prevent unused variable warning
 
         #Topics from estimator node
         self.subscription_estimator = self.create_subscription(Image, '/needle/state/jacobian', self.jacobian_callback, 10)
@@ -40,8 +44,19 @@ class ControllerNode(Node):
         self.entry_point = np.empty(shape=[0,7])    # Initial needle tip pose
         self.tip = np.empty(shape=[0,7])            # Current needle tip pose
         self.target = np.empty(shape=[0,7])         # Current target pose
+        self.stage = np.empty(shape=[0,2])          # Current stage pose
         self.cmd = np.zeros((2,1))                  # Control output to the robot stage
+        self.robot_ready = True                     # Robot free to new command
 
+    # Get current base pose
+    def robot_callback(self, msg_robot):
+        # Save base pose only after getting entry point
+        if len(self.entry_point) != 0:
+            # Get pose from PoseStamped
+            robot = msg_robot.pose
+            # Get robot position and add the initial entry point (home position)
+            self.stage = np.array([[robot.position.x + self.entry_point[0,0], robot.position.z + self.entry_point[2,0]]]).T
+    
     # Get current entry point
     def entry_callback(self, msg):
         entry_point = msg.pose
@@ -59,29 +74,34 @@ class ControllerNode(Node):
         J = np.asarray(CvBridge().imgmsg_to_cv2(msg))
         Jc = np.array([J[:,0],J[:,2]]).T
         
-        # Start controller only after first readings
-        if (len(self.entry_point) and len(self.tip)) != 0:
+        # Send control signal only if robot is ready and after first readings (entry point and current needle tip)
+        if ((self.robot_ready == True) and len(self.entry_point) and len(self.tip)) != 0:
             target = np.array([[self.entry_point[0,0], self.tip[1,0], self.entry_point[2,0], \
                                 self.tip[3,0], self.tip[4,0], self.tip[5,0], self.tip[6,0]]]).T
 
-            K = self.get_parameter('K').get_parameter_value().double_value         # Get K value
-            self.cmd = self.cmd + K*np.matmul(np.linalg.pinv(Jc),self.tip-target)  # Calculate control output
+            K = self.get_parameter('K').get_parameter_value().double_value    # Get K value          
+            cmd = self.stage + K*np.matmul(np.linalg.pinv(Jc),self.tip-target)  # Calculate control output
+
+            # Limit control output to maximum +-5mm around entry point
+            self.cmd[0] = min(cmd[0], self.entry_point[0,0]+5)
+            self.cmd[1] = min(cmd[1], self.entry_point[2,0]+5)
 
             # Send command to stage
-            self.send_cmd(float(self.cmd[0]), float(self.cmd[1]))
+            # Subtract the entry point because robot considers initial position to be (0,0)
+            self.send_cmd(float(self.cmd[0])-self.entry_point[0,0], float(self.cmd[1])-self.entry_point[2,0])
+            self.robot_ready = False
             
             # Publish control output
             msg = PointStamped()
-            msg.point.x = float(self.cmd[0])
-            msg.point.z = float(self.cmd[1])
+            msg.point.x = float(self.cmd[0]) - self.entry_point[0,0]
+            msg.point.z = float(self.cmd[1]) - self.entry_point[2,0]
             msg.header.stamp = self.get_clock().now().to_msg()
 
             self.publisher_control.publish(msg)
-            #self.get_logger().info('Publish - Control cmd: %s' %  self.cmd)
+            self.get_logger().info('cmd: %s - send_cmd: %s' %  (cmd, self.cmd))
 
     # Send MoveStage action to Stage node (Goal)
     def send_cmd(self, x, z):
-
         goal_msg = MoveStage.Goal()
         goal_msg.x = x
         goal_msg.z = z
@@ -91,12 +111,13 @@ class ControllerNode(Node):
         self.action_client.wait_for_server()
         
         self.get_logger().info('Action stage - Sending goal request... Control u: x=%f, z=%f' % (goal_msg.x, goal_msg.z))      
-        self.send_goal_future = self.action_client.send_goal_async(goal_msg, feedback_callback=self.feedback_callback)
+        self.send_goal_future = self.action_client.send_goal_async(goal_msg)
+        # self.send_goal_future = self.action_client.send_goal_async(goal_msg, feedback_callback=self.feedback_callback)
         self.send_goal_future.add_done_callback(self.goal_response_callback)
 
     # Get MoveStage action progress messages (Feedback)
-    def feedback_callback(self, feedback):
-        self.get_logger().info('Received feedback: {0}'.format(feedback.feedback.x))
+    # def feedback_callback(self, feedback):
+        # self.get_logger().info('Received feedback: {0}'.format(feedback.feedback.x))
 
     # Check if MoveStage action was accepted 
     def goal_response_callback(self, future):
@@ -116,6 +137,7 @@ class ControllerNode(Node):
         status = future.result().status
         if status == GoalStatus.STATUS_SUCCEEDED:
             self.get_logger().info('Goal succeeded! Result: {0}'.format(result.x))
+            self.robot_ready = True
         else:
             self.get_logger().info('Goal failed with status: {0}'.format(status))
 
