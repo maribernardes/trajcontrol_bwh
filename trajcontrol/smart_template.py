@@ -59,6 +59,7 @@ class VirtualRobot(Node):
                self.get_logger().info('Could not open Serial connection')
        
         
+        
         self.needle_pose = 0.0
         self.time_stamp = 0.0
         self.i = 0
@@ -66,47 +67,62 @@ class VirtualRobot(Node):
     def getMotorPosition(self):
         try:
             self.ser.flushInput()
-            time.sleep(0.5)
+            time.sleep(0.1)
             self.ser.write(str.encode("TP;"))
             time.sleep(0.1)
             bytesToRead = self.ser.inWaiting()
             data_temp = self.ser.read(bytesToRead-3)
-            print(data_temp)
+            self.get_logger().info('motor position %s'  % (data_temp))
         except:
             self.status = 0
             return str(0)
         return data_temp
+                
+
 
     def insertion_callback(self,msg_ins):
         self.insertion = msg_ins.data
+        
+        if self.insertion == 0:
+            self.ser.write(str.encode("DPA=0;"))
+            self.ser.write(str.encode("PTA=1;"))
+            self.ser.write(str.encode("DPB=0;"))
+            self.ser.write(str.encode("PTB=1;"))
+            self.ser.write(str.encode("SH;")) #Check this code
+            self.AbsoluteMode = True
+            self.get_logger().info('Needle guide at position zero')
+            
+        
         self.get_logger().info('PM Listening Insertion Node %f mm'  % (self.insertion))
-        
-        
         
         msg = PoseStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = "stage"
 
-
-        read_position = self.getMotorPosition()
-
-        Z = [0,0,0] #read_position.split(',')
-
+        #TODO REMOVE b'
+        read_position = str(self.getMotorPosition())
+        read_position.replace("b'", "")
+        
+        self.get_logger().info('motor position in total %s'  % (read_position))
+        
+        Z = read_position.split(',')
+        self.get_logger().info('motor position in Z %s %s'  % (Z[0],Z[1]))
+        
         msg.pose.position.x = float(Z[0])*COUNT_2_MM
         msg.pose.position.y = float(self.insertion)
         msg.pose.position.z = float(Z[1])*COUNT_2_MM
-        print("test antes antes")
+
         msg.pose.orientation = Quaternion(x=float(0), y=float(0), z=float(0), w=float(0))
-        print("test antes")
+
         self.publisher_needle_pose.publish(msg)
-        print("test")
+
         self.get_logger().info('Publish - Needle pose %i: x=%f, y=%f, z=%f, q=[%f, %f, %f, %f] in %s frame'  % (self.i, msg.pose.position.x, \
             msg.pose.position.y, msg.pose.position.z,  msg.pose.orientation.x, \
             msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w, msg.header.frame_id))
         self.i += 1
 
 
-    # Publish current needle_pose
+    # Publish current needle_pose - Not being used with Aurora and manual insertion - see insertion_callback
     def needlepose_callback(self):
 
         msg = PoseStamped()
@@ -157,11 +173,20 @@ class VirtualRobot(Node):
             self.get_logger().info("*** could not send exec command ***")
             return 0
 
+    def check_limits(self,X,Channel):
+        if X > 5*MM_2_COUNT:
+            self.get_logger().info("Limit reach at axis %s" % (Channel))
+            X = 5*MM_2_COUNT
+        elif X < -5*MM_2_COUNT:
+            self.get_logger().info("Limit reach at axis %s" % (Channel))
+            X = -5*MM_2_COUNT
+        return X
+
     def send_movement_in_counts(self,X,Channel):
    #     try:
-        print(X)
-        send = "PR%s=%d;" % (Channel,int(X))
-        print(send)
+
+        X = self.check_limits(X,Channel)
+        send = "PA%s=%d;" % (Channel,int(X))
         self.ser.write(str.encode(send))
         time.sleep(0.1)
         self.get_logger().info("Sent to Galil PR%s=%d" % (Channel,X))
