@@ -50,19 +50,20 @@ class EstimatorNode(Node):
                   (-0.0017,-0.0006, 0.0009, 0.0040, 0.0083, 0.0053,-0.0007),
                   (0, 0, 0, 0, 0, 0, 0)])
 
-        self.Xant = np.zeros((7,1))
-        self.Zant = np.zeros((7,1))
-        self.TXant = self.get_clock().now().to_msg()
-        self.TZant = self.get_clock().now().to_msg()
+        self.Xant = np.zeros((7,1))                     # Previous X = [x_robot, y_needle_depth, z_robot, q_needle_roll]
+        self.Zant = np.zeros((7,1))                     # Previous Z = [x_tip, y_tip, z_tip, q_tip] 
+        self.TXant = self.get_clock().now().to_msg()    # Previous X instant (time)
+        self.TZant = self.get_clock().now().to_msg()    # Previous Z instant (time)
 
-        self.Z = np.zeros((7,1)) #Store last aurora measurement
-        self.i = 0
+        self.entry_point = np.empty(shape=[0,7])      # Initial needle tip pose
+        self.Z = np.empty(shape=[0,7])                # Last needle tip pose
+        self.i = 0                                    # Estimation step
         
     # Get current entry point from UI node
     def entry_point_callback(self, msg):
-        entry_point = msg.pose.position
-        #self.get_logger().info('Listening UI - Skin entry point: x=%f, y=%f, z=%f in %s frame'  % (entry_point.x, entry_point.y, \
-        #    entry_point.z, msg.header.frame_id))
+        entry_point = msg.pose
+        self.entry_point = np.array([[entry_point.position.x, entry_point.position.y, entry_point.position.z, \
+                                entry_point.orientation.w, entry_point.orientation.x, entry_point.orientation.y, entry_point.orientation.z]]).T
 
     # Get current needle tip from sensor processing node
     # Z = [x_tip, y_tip, z_tip, q_tip] (Obs: for q, roll=pitch)
@@ -70,51 +71,50 @@ class EstimatorNode(Node):
         # Get filtered sensor in robot frame        
         self.Z = np.array([[msg_sensor.pose.position.x, msg_sensor.pose.position.y, msg_sensor.pose.position.z, \
             msg_sensor.pose.orientation.w, msg_sensor.pose.orientation.x, msg_sensor.pose.orientation.y, msg_sensor.pose.orientation.z]]).T
-
-        self.i+= 1
-        #self.get_logger().info('Sample #%i: Z = %s in %s frame' % (self.i, self.Z.T, msg_sensor.header.frame_id))
+        #self.get_logger().info('Z = %s in %s frame' % (self.Z.T, msg_sensor.header.frame_id))
 
     # Get current needle_pose from robot node
-    # Get estimator input X ("Prediction")
     # X = [x_robot, y_needle_depth, z_robot, q_needle_roll]
+    # Get estimator input X
     # Perform estimator "correction" from last Z (aurora)
     def robot_callback(self, msg_robot):
 
-        # Get pose from PoseStamped
-        robot = msg_robot.pose
-        TX = msg_robot.header.stamp
-        
-        # From robot, get input X
-        X = np.array([[robot.position.x, robot.position.y, robot.position.z, \
-            robot.orientation.w, robot.orientation.x, robot.orientation.y, robot.orientation.z]]).T
+        # Start estimator only after getting initial position (entry point)
+        if len(self.entry_point) != 0:
+            # Get pose from PoseStamped
+            robot = msg_robot.pose
+            TX = msg_robot.header.stamp
+            
+            # From robot, get input X and add the initial entry point (home position)
+            X = np.array([[robot.position.x + self.entry_point[0,0], robot.position.y + self.entry_point[1,0], robot.position.z + self.entry_point[2,0], \
+                robot.orientation.w, robot.orientation.x, robot.orientation.y, robot.orientation.z]]).T
 
-        deltaTX = ((TX.sec*1e9 + TX.nanosec) - (self.TXant.sec*1e9 + self.TXant.nanosec))*1e-9
-        
-        #For now, consider simultaneous robot and Aurora readings
-        TZ = TX
-        deltaTZ = deltaTX
+            deltaTX = ((TX.sec*1e9 + TX.nanosec) - (self.TXant.sec*1e9 + self.TXant.nanosec))*1e-9
+            
+            #For now, consider simultaneous robot and Aurora readings
+            TZ = TX
+            deltaTZ = deltaTX
 
-        deltaZ = (self.Z - self.Zant)/deltaTZ
-        deltaX = (X - self.Xant)/deltaTX
+            deltaZ = (self.Z - self.Zant)/deltaTZ
+            deltaX = (X - self.Xant)/deltaTX
 
-        self.Zant = self.Z
-        self.Xant = X
-        self.TXant = TX
-        self.TZant = TZ
+            self.Zant = self.Z
+            self.Xant = X
+            self.TXant = TX
+            self.TZant = TZ
 
-        alpha = self.get_parameter('alpha').get_parameter_value().double_value
-        if (self.i > 0): #Does nothing if first sample (no deltas)
-            self.J = self.J + alpha*np.matmul(((deltaZ-np.matmul(self.J, deltaX))/(np.matmul(np.transpose(deltaX), deltaX)+1e-9)), np.transpose(deltaX))
+            alpha = self.get_parameter('alpha').get_parameter_value().double_value
+            if (self.i > 0): #Does nothing if first sample (no deltas)
+                self.J = self.J + alpha*np.matmul(((deltaZ-np.matmul(self.J, deltaX))/(np.matmul(np.transpose(deltaX), deltaX)+1e-9)), np.transpose(deltaX))
+            self.i += 1
+            # self.get_logger().info('Sample #%i: X = %s in %s frame' % (self.i, X.T, msg_robot.header.frame_id))
+            
+            # Publish new Jacobian
+            msg = CvBridge().cv2_to_imgmsg(self.J)
+            msg.header.stamp = self.get_clock().now().to_msg()
 
-        # self.get_logger().info('Sample #%i: X = %s in %s frame' % (self.i, X.T, msg_robot.header.frame_id))
-        self.i += 1
-        
-        # Publish new Jacobian
-        msg = CvBridge().cv2_to_imgmsg(self.J)
-        msg.header.stamp = self.get_clock().now().to_msg()
-
-        self.publisher_jacobian.publish(msg)
-        # self.get_logger().info('Publish - Jacobian: %s' %  self.J)
+            self.publisher_jacobian.publish(msg)
+            # self.get_logger().info('Publish - Jacobian: %s' %  self.J)
 
 ########################################################################
 ### Auxiliar functions ###
