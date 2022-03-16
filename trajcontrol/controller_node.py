@@ -106,10 +106,10 @@ class ControllerNode(Node):
         goal_msg.z = z
         goal_msg.eps = 0.0
 
-        self.get_logger().info('Waiting for action server...')
+        # self.get_logger().info('Waiting for action server...')
         self.action_client.wait_for_server()
         
-        self.get_logger().info('Action stage - Sending goal request... Control u: x=%f, z=%f' % (goal_msg.x, goal_msg.z))      
+        self.get_logger().info('Control u: x=%f, z=%f - Tip: x=%f, z=%f' % (goal_msg.x, goal_msg.z, self.tip[0,0], self.tip[2,0]))      
         self.send_goal_future = self.action_client.send_goal_async(goal_msg)
         # self.send_goal_future = self.action_client.send_goal_async(goal_msg, feedback_callback=self.feedback_callback)
         self.send_goal_future.add_done_callback(self.goal_response_callback)

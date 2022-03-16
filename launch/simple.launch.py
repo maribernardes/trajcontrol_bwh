@@ -46,7 +46,8 @@ def generate_launch_description():
 
     controller = Node(
         package="trajcontrol",
-        executable="controller_node"
+        executable="controller_node",
+        parameters=[config]
     )   
 
     return LaunchDescription([
