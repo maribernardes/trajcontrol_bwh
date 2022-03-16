@@ -79,18 +79,23 @@ class ControllerNode(Node):
             target = np.array([[self.entry_point[0,0], self.tip[1,0], self.entry_point[2,0], \
                                 self.tip[3,0], self.tip[4,0], self.tip[5,0], self.tip[6,0]]]).T
 
-            K = self.get_parameter('K').get_parameter_value().double_value    # Get K value          
-            cmd = self.stage + K*np.matmul(np.linalg.pinv(Jc),self.tip-target)  # Calculate control output
+            K = self.get_parameter('K').get_parameter_value().double_value      # Get K value          
+            self.cmd = self.stage + K*np.matmul(np.linalg.pinv(Jc),self.tip-target)  # Calculate control output
 
             # Limit control output to maximum +-5mm around entry point
-            self.cmd[0] = min(cmd[0], self.entry_point[0,0]+5)
-            self.cmd[1] = min(cmd[1], self.entry_point[2,0]+5)
+            self.cmd[0] = min(self.cmd[0], self.entry_point[0,0]+5)
+            self.cmd[1] = min(self.cmd[1], self.entry_point[2,0]+5)
+            self.cmd[0] = max(self.cmd[0], self.entry_point[0,0]-5)
+            self.cmd[1] = max(self.cmd[1], self.entry_point[2,0]-5)
 
             # Send command to stage
             # Subtract the entry point because robot considers initial position to be (0,0)
             self.send_cmd(float(self.cmd[0])-self.entry_point[0,0], float(self.cmd[1])-self.entry_point[2,0])
             self.robot_ready = False
-            
+
+            self.get_logger().info('Control: x=%f, z=%f - Tip: x=%f, y= %f, z=%f - Target: x=%f, y=%f, z=%f' % (self.cmd[0], self.cmd[1], \
+            self.tip[0,0], self.tip[1,0], self.tip[2,0], target[0,0], target[1,0], target[2,0]))    
+
             # Publish control output
             msg = PointStamped()
             msg.point.x = float(self.cmd[0]) - self.entry_point[0,0]
@@ -107,9 +112,7 @@ class ControllerNode(Node):
         goal_msg.eps = 0.0
 
         # self.get_logger().info('Waiting for action server...')
-        self.action_client.wait_for_server()
-        
-        self.get_logger().info('Control u: x=%f, z=%f - Tip: x=%f, z=%f' % (goal_msg.x, goal_msg.z, self.tip[0,0], self.tip[2,0]))      
+        self.action_client.wait_for_server()  
         self.send_goal_future = self.action_client.send_goal_async(goal_msg)
         # self.send_goal_future = self.action_client.send_goal_async(goal_msg, feedback_callback=self.feedback_callback)
         self.send_goal_future.add_done_callback(self.goal_response_callback)
