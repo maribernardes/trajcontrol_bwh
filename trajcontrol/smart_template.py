@@ -20,7 +20,7 @@ from std_msgs.msg import Int8
 from datetime import datetime
 now = datetime.now()
 
-MM_2_COUNT = 500
+MM_2_COUNT = 2000.0/2.5349
 COUNT_2_MM = 2.5349/2000.0
 
 class VirtualRobot(Node):
@@ -67,7 +67,7 @@ class VirtualRobot(Node):
     def getMotorPosition(self):
         try:
             self.ser.flushInput()
-            time.sleep(0.1)
+            time.sleep(0.2)
             self.ser.write(str.encode("TP;"))
             time.sleep(0.1)
             bytesToRead = self.ser.inWaiting()
@@ -91,22 +91,17 @@ class VirtualRobot(Node):
             self.ser.write(str.encode("SH;")) #Check this code
             self.AbsoluteMode = True
             self.get_logger().info('Needle guide at position zero')
-            
-        
-        self.get_logger().info('PM Listening Insertion Node %f mm'  % (self.insertion))
-        
+            read_position = str(self.getMotorPosition())
+              
         msg = PoseStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = "stage"
 
-        #TODO REMOVE b'
+
         read_position = str(self.getMotorPosition())
-        read_position.replace("b'", "")
-        
-        self.get_logger().info('motor position in total %s'  % (read_position))
-        
+        read_position = read_position[2 : : ]
         Z = read_position.split(',')
-        self.get_logger().info('motor position in Z %s %s'  % (Z[0],Z[1]))
+
         
         msg.pose.position.x = float(Z[0])*COUNT_2_MM
         msg.pose.position.y = float(self.insertion)
@@ -135,7 +130,7 @@ class VirtualRobot(Node):
         Z = read_position.split(',')
 
         msg.pose.position.x = float(Z[0])*COUNT_2_MM
-        msg.pose.position.y = self.insertion
+        msg.pose.position.y = float(self.insertion)
         msg.pose.position.z = float(Z[1])*COUNT_2_MM
 
         msg.pose.orientation = Quaternion(x=float(0), y=float(0), z=float(0), w=float(0))
