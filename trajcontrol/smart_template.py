@@ -26,7 +26,7 @@ COUNT_2_MM = 2.5349/2000.0
 class VirtualRobot(Node):
 
     def __init__(self):
-        super().__init__('virtual_robot')
+        super().__init__('smart_template')
         
 
 

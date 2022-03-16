@@ -17,7 +17,7 @@ STEP = 5
 class InsertionNode(Node):
 
     def __init__(self):
-        super().__init__('save_file')
+        super().__init__('insertion_node')
         self.publisher_insertion = self.create_publisher(Int8, '/needle/state/insertion', 10)
         self.msg = Int8()
         
