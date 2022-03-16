@@ -82,12 +82,12 @@ class SensorProcessing(Node):
             if len(self.registration) != 0: 
                 self.aurora = np.row_stack((self.aurora, self.Z_sensor))
 
-                # Smooth the measurements with a median filter 
-                n = self.aurora.shape[0]
-                size_win = min(n, 500) #array window size
-                if (size_win>0): 
-                    Z_filt = median_filter(self.aurora[n-size_win:n,:], size=(40,1)) # use 40 samples median filter (column-wise)
-                    Z_sensor = Z_filt[size_win-1,:]                                  # get last value
+                # # Smooth the measurements with a median filter 
+                # n = self.aurora.shape[0]
+                # size_win = min(n, 500) #array window size
+                # if (size_win>0): 
+                #     Z_filt = median_filter(self.aurora[n-size_win:n,:], size=(40,1)) # use 40 samples median filter (column-wise)
+                #     Z_sensor = Z_filt[size_win-1,:]                                  # get last value
                             
                 # Transform from sensor to robot frame
                 self.Z = pose_transform(Z_sensor, self.registration)
