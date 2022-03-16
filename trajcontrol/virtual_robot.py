@@ -74,7 +74,7 @@ class VirtualRobot(Node):
     # Accept or reject a client request to begin an action
     # This server allows multiple goals in parallel
     def goal_callback(self, goal_request):
-        self.get_logger().info('Received goal request')
+        # self.get_logger().info('Received goal request')
         return GoalResponse.ACCEPT
 
     # Accept or reject a client request to cancel an action
@@ -111,7 +111,7 @@ class VirtualRobot(Node):
         result = MoveStage.Result()
         result.x = feedback_msg.x
 
-        self.get_logger().info('Returning result: {0}'.format(result.x))
+        # self.get_logger().info('Returning result: {0}'.format(result.x))
 
         return result
 

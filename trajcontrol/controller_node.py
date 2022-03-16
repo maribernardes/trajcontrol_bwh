@@ -98,7 +98,6 @@ class ControllerNode(Node):
             msg.header.stamp = self.get_clock().now().to_msg()
 
             self.publisher_control.publish(msg)
-            self.get_logger().info('cmd: %s - send_cmd: %s' %  (cmd, self.cmd))
 
     # Send MoveStage action to Stage node (Goal)
     def send_cmd(self, x, z):
@@ -126,8 +125,7 @@ class ControllerNode(Node):
             self.get_logger().info('Goal rejected :(')
             return
 
-        self.get_logger().info('Goal accepted :)')
-
+        # self.get_logger().info('Goal accepted :)')
         self._get_result_future = goal_handle.get_result_async()
         self._get_result_future.add_done_callback(self.get_result_callback)
 
