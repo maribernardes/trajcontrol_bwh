@@ -51,7 +51,7 @@ class SensorProcessing(Node):
         ### B = np.array([[x0, x1, ..., xn], [y0, y1, ..., yn], [z0, z1, ..., zn]]) ###
         ###############################################################################
         self.A = np.empty(shape=[3,0])                  # registration points in aurora frame
-        self.B = np.array([[20, 20, 5, 20, 20, 5], [0, 15, 15, 0, 15, 15], [0, 0, 0, 22.3, 22.3, 22.3]])     # registration points in stage frame
+        self.B = np.array([[-5, -75, -75, -5, -40, -5, -75, -75, -5, -40], [0, 0, 80, 80, 40, 0, 0, 80, 80, 40], [0, 0, 0, 0, 0, 22.3, 22.3, 22.3, 22.3, 22.3]])     # registration points in stage frame
         self.keyboard_request = np.zeros(self.B.shape[1]+1)  # requests for key pressing (1 = already requested / 0 = to be requested). Quantity: #registration points + entry point
 
     def timer_entry_point_callback(self):
@@ -82,12 +82,12 @@ class SensorProcessing(Node):
             if len(self.registration) != 0: 
                 self.aurora = np.row_stack((self.aurora, self.Z_sensor))
 
-                # # Smooth the measurements with a median filter 
-                # n = self.aurora.shape[0]
-                # size_win = min(n, 500) #array window size
-                # if (size_win>0): 
-                #     Z_filt = median_filter(self.aurora[n-size_win:n,:], size=(40,1)) # use 40 samples median filter (column-wise)
-                #     Z_sensor = Z_filt[size_win-1,:]                                  # get last value
+                # Smooth the measurements with a median filter 
+                n = self.aurora.shape[0]
+                size_win = min(n, 500) #array window size
+                if (size_win>0): 
+                    Z_filt = median_filter(self.aurora[n-size_win:n,:], size=(40,1)) # use 40 samples median filter (column-wise)
+                    Z_sensor = Z_filt[size_win-1,:]                                  # get last value
                             
                 # Transform from sensor to robot frame
                 self.Z = pose_transform(Z_sensor, self.registration)
