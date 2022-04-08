@@ -41,8 +41,8 @@ class SensorProcessing(Node):
         #Stored values
         self.registration = np.empty(shape=[0,7])   # Registration transform (from aurora to stage)
         self.aurora = np.empty(shape=[0,7])         # All stored Aurora readings as they are sent
-        self.Z_sensor = np.empty(shape=[0,7])       # Aurora values as they are sent
-        self.Z = np.empty(shape=[0,7])              # Filtered aurora data in robot frame
+        self.Z_sensor = np.empty(shape=[0,7])       # Aurora sensor value as sent
+        self.Z = np.empty(shape=[0,7])              # Filtered aurora value in robot frame
         self.entry_point = np.empty(shape=[0,7])    # Tip position at begining of insertion
 
         # Registration points A (aurora) and B (stage)
@@ -91,8 +91,6 @@ class SensorProcessing(Node):
                             
                 # Transform from sensor to robot frame
                 self.Z = pose_transform(Z_sensor, self.registration)
-                # if len(self.entry_point) != 0: # Only print after experiment begins
-                #     self.get_logger().info('Sample Z = %s in stage frame' % (self.Z))
                 
                 # Publish last needle filtered pose in robot frame
                 msg = PoseStamped()
@@ -246,8 +244,6 @@ def main(args=None):
         else:
             sensor_processing.get_logger().info('Entry point = %s' %  (sensor_processing.entry_point))
             break
-
-
 
     rclpy.spin(sensor_processing)
     

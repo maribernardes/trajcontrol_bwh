@@ -15,7 +15,6 @@ class SaveFile(Node):
 
     def __init__(self):
         super().__init__('save_file')
-
         
         #Declare node parameters
         self.declare_parameter('filename', 'my_data') #Name of file where data values are saved
