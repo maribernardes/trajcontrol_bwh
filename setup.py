@@ -31,7 +31,6 @@ setup(
             'keypress = trajcontrol.keypress:main',
             'sensor_processing = trajcontrol.sensor_processing:main',
             'smart_template = trajcontrol.smart_template:main',
-            'insertion_node = trajcontrol.insertion_node:main',
             'estimator_node = trajcontrol.estimator_node:main',
             'controller_node = trajcontrol.controller_node:main',
             'save_file = trajcontrol.save_file:main',
