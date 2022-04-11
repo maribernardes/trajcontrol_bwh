@@ -34,8 +34,7 @@ class EstimatorNode(Node):
         self.subscription_sensor = self.create_subscription(PoseStamped, '/needle/state/pose_filtered', self.sensor_callback, 10)
         self.subscription_sensor # prevent unused variable warning
 
-        #Published topics
-        self.publisher_jacobian = self.create_publisher(Image, '/needle/state/jacobian', 10)
+        #Published topicsCurrentcobian', 10)
         
         # Print numpy floats with only 3 decimal places
         np.set_printoptions(formatter={'float': lambda x: "{0:0.4f}".format(x)})
@@ -55,8 +54,8 @@ class EstimatorNode(Node):
         self.TXant = self.get_clock().now().to_msg()    # Previous X instant (time)
         self.TZant = self.get_clock().now().to_msg()    # Previous Z instant (time)
 
-        self.entry_point = np.empty(shape=[0,7])      # Initial needle tip pose
-        self.Z = np.empty(shape=[0,7])                # Last needle tip pose
+        self.entry_point = np.empty(shape=[7,0])      # Initial needle tip pose
+        self.Z = np.empty(shape=[7,0])                # Last needle tip pose
         self.i = 0                                    # Estimation step
         
     # Get current entry point from UI node
@@ -80,7 +79,7 @@ class EstimatorNode(Node):
     def robot_callback(self, msg_robot):
 
         # Start estimator only after getting initial position (entry point)
-        if len(self.entry_point) != 0:
+        if (self.entry_point.size != 0):
             # Get pose from PoseStamped
             robot = msg_robot.pose
             TX = msg_robot.header.stamp
