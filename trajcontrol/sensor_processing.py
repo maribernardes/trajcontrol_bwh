@@ -56,7 +56,7 @@ class SensorProcessing(Node):
 
     def timer_entry_point_callback(self):
         # Publishes only after experiment started (stored entry point is available)
-        if len(self.entry_point) != 0:
+        if (self.entry_point.size != 0):
             msg = PoseStamped()
             msg.header.stamp = self.get_clock().now().to_msg()
             msg.header.frame_id = "stage"
@@ -69,7 +69,7 @@ class SensorProcessing(Node):
             msg.pose.orientation.z = self.entry_point[3]
             self.publisher_entry_point.publish(msg)
 
-    # Get current Aurora sensor measurements
+    # Get current Aurora sensor measurements and publishes to '/needle/state/pose_filtered'
     def aurora_callback(self, msg_sensor):
         # Get needle shape from Aurora IGTL
         name = msg_sensor.name      
@@ -79,7 +79,7 @@ class SensorProcessing(Node):
                 msg_sensor.transform.rotation.w, msg_sensor.transform.rotation.x, msg_sensor.transform.rotation.y, msg_sensor.transform.rotation.z]])
 
             # Filter and transform Aurora data only after registration was performed or loaded from file
-            if len(self.registration) != 0: 
+            if (self.registration.size != 0): 
                 self.aurora = np.row_stack((self.aurora, self.Z_sensor))
 
                 # Smooth the measurements with a median filter 
@@ -102,15 +102,15 @@ class SensorProcessing(Node):
     
     # A keyboard hotkey was pressed 
     def keyboard_callback(self, msg):
-        if (msg.data == 10) and (len(self.registration) == 0): # ENTER and missing registration
-            if len(self.Z_sensor)==0:   # No aurora reading to store
+        if (msg.data == 10) and (self.registration.size == 0): # ENTER and missing registration
+            if (self.Z_sensor.size == 0):   # No aurora reading to store
                 self.get_logger().info('There is no sensor reading to store')
             else:
                 P = self.Z_sensor[0,0:3] # Store next registration point
                 self.get_logger().info('Stored Point #%i = %s' % (self.A.shape[1]+1, P.T))
                 self.A = np.column_stack((self.A, P.T))
-        elif (msg.data == 32) and (len(self.entry_point) == 0): # SPACE and missing entry point
-            if len(self.Z)==0:   # No filtered sensor reading to store
+        elif (msg.data == 32) and (self.entry_point.size == 0): # SPACE and missing entry point
+            if (self.Z.size == 0):   # No filtered sensor reading to store
                 self.get_logger().info('There is no sensor reading to store')
             else:
                 self.entry_point = self.Z #Store entry point
@@ -145,7 +145,7 @@ class SensorProcessing(Node):
             
     def get_entry_point(self):
         # Get entry point if nothing was stored
-        if len(self.entry_point) == 0:
+        if (self.entry_point.size == 0):
             #Listen to keyboard
             self.listen_keyboard = True         
             if (self.keyboard_request[-1] == 0): # Print request message only once 
@@ -230,7 +230,7 @@ def main(args=None):
     # Initialize registration
     while rclpy.ok():
         rclpy.spin_once(sensor_processing)
-        if len(sensor_processing.registration) == 0: #No registration yet
+        if (sensor_processing.registration.size == 0): #No registration yet
             sensor_processing.get_registration()
         else:
             sensor_processing.get_logger().info('Registration = %s' %  (sensor_processing.registration))
@@ -239,7 +239,7 @@ def main(args=None):
     # Initialize entry point position
     while rclpy.ok():
         rclpy.spin_once(sensor_processing)
-        if len(sensor_processing.entry_point) == 0: #No entry point yet
+        if (sensor_processing.entry_point.size == 0): #No entry point yet
             sensor_processing.get_entry_point()
         else:
             sensor_processing.get_logger().info('Entry point = %s' %  (sensor_processing.entry_point))

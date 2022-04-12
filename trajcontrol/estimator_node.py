@@ -55,8 +55,8 @@ class EstimatorNode(Node):
         self.TXant = self.get_clock().now().to_msg()    # Previous X instant (time)
         self.TZant = self.get_clock().now().to_msg()    # Previous Z instant (time)
 
-        self.entry_point = np.empty(shape=[0,7])      # Initial needle tip pose
-        self.Z = np.empty(shape=[0,7])                # Last needle tip pose
+        self.entry_point = np.empty(shape=[7,0])      # Initial needle tip pose
+        self.Z = np.empty(shape=[7,0])                # Last needle tip pose
         self.i = 0                                    # Estimation step
         
     # Get current entry point from UI node
@@ -80,7 +80,7 @@ class EstimatorNode(Node):
     def robot_callback(self, msg_robot):
 
         # Start estimator only after getting initial position (entry point)
-        if len(self.entry_point) != 0:
+        if (self.entry_point.size != 0):
             # Get pose from PoseStamped
             robot = msg_robot.pose
             TX = msg_robot.header.stamp
