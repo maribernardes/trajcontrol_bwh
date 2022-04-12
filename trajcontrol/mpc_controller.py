@@ -13,7 +13,7 @@ from stage_control_interfaces.action import MoveStage
 from scipy.optimize import minimize
 
 
-class ControllerNode(Node):
+class MPCController(Node):
 
     def __init__(self):
         super().__init__('mpc_controller')
@@ -48,8 +48,9 @@ class ControllerNode(Node):
 
         self.tip = np.empty(shape=[7,0])            # Current needle tip pose
         self.stage = np.empty(shape=[2,0])          # Current stage pose
-        self.curr_time = 0.0                        # Current time stamp (from robot pose message)
-        self.prev_time = 0.0                        # Previous time stamp (from robot pose message)
+        now = self.get_clock().now().to_msg()
+        self.curr_time = now                        # Current time stamp (from robot pose message)
+        self.prev_time = now                        # Previous time stamp (from robot pose message)
 
         self.entry_point = np.empty(shape=[7,0])    # Initial needle tip pose
         self.cmd = np.zeros((2,1))                  # Control output to the robot stage
@@ -65,7 +66,7 @@ class ControllerNode(Node):
             # Get robot position and add the initial entry point (home position)
             self.stage = np.array([[robot.position.x + self.entry_point[0,0], robot.position.z + self.entry_point[2,0]]]).T
             self.prev_time = self.curr_time                        # Previous time stamp (from robot pose message)
-            self.curr_time = msg_robot.header.timestamp            # Current time stamp (from robot pose message)
+            self.curr_time = msg_robot.header.stamp            # Current time stamp (from robot pose message)
 
     # Get current entry point
     def entry_callback(self, msg):
@@ -90,8 +91,12 @@ class ControllerNode(Node):
                                 self.tip[3,0], self.tip[4,0], self.tip[5,0], self.tip[6,0]]]).T
 
             # MPC Initialization
-            u_hat = np.zeros((2,C))                     # Initial control guess (vector with C size)
-            delta_t = self.curr_time - self.prev_time   # Time between previous and current samples
+            u_hat = np.zeros((2,C))                                             # Initial control guess (vector with C size)
+
+            ################################################################
+            ## TODO: Calculate or receive delta_t for each control step   ##
+            ################################################################
+            delta_t = (self.curr_time.nanosec - self.prev_time.nanosec)*1e9     # Temporary delta_t
 
 ########################################################################
             ## MPC Functions
@@ -131,33 +136,33 @@ class ControllerNode(Node):
 ########################################################################
 
             # Initial objective
-            self.get_logger('Initial SSE Objective: ' + str(objective(u_hat)))  # calculate cost function with initial guess
+            self.get_logger().info('Initial SSE Objective: %f' % (objective(u_hat)))  # calculate cost function with initial guess
 
             # MPC calculation
-            start = time.time()
+            start_time = time.time()
             solution = minimize(objective,u_hat,method='SLSQP', bounds=[(-10, 10) for i in range(0,2*C)]) # optimizes the objective function
             u = np.reshape(solution.x,(2,C))           # reshape solution (minimize flattens it)
-            end = time.time()
-            elapsed = end - start
+            end_time = time.time()
             
-            self.get_logger('Final SSE Objective: ' + str(objective(u))) # calculate cost function with optimization result
-            self.get_logger('Elapsed time: ' + str(elapsed) )
+            cost = objective(u)
+            self.get_logger().info('Final SSE Objective: %f' % (objective(u))) # calculate cost function with optimization result
+            self.get_logger().info('Elapsed time: %f' % (end_time-start_time))
                 
             # Update controller output
             self.cmd = u
 
             # Send command to stage
             # Subtract the entry point because robot considers initial position to be (0,0)
-            self.send_cmd(float(self.cmd[0])-self.entry_point[0,0], float(self.cmd[1])-self.entry_point[2,0])
+            self.send_cmd(float(self.cmd[0,0])-self.entry_point[0,0], float(self.cmd[1,0])-self.entry_point[2,0])
             self.robot_ready = False
 
-            self.get_logger().info('Control: x=%f, z=%f - Tip: x=%f, y= %f, z=%f - Target: x=%f, y=%f, z=%f' % (self.cmd[0], self.cmd[1], \
+            self.get_logger().info('Control: x=%f, z=%f - Tip: x=%f, y= %f, z=%f - Target: x=%f, y=%f, z=%f' % (self.cmd[0,0], self.cmd[1,0], \
             self.tip[0,0], self.tip[1,0], self.tip[2,0], target[0,0], target[1,0], target[2,0]))    
 
             # Publish control output
             msg = PointStamped()
-            msg.point.x = float(self.cmd[0]) - self.entry_point[0,0]
-            msg.point.z = float(self.cmd[1]) - self.entry_point[2,0]
+            msg.point.x = float(self.cmd[0,0]) - self.entry_point[0,0]
+            msg.point.z = float(self.cmd[1,0]) - self.entry_point[2,0]
             msg.header.stamp = self.get_clock().now().to_msg()
 
             self.publisher_control.publish(msg)
@@ -195,24 +200,25 @@ class ControllerNode(Node):
         result = future.result().result
         status = future.result().status
         if status == GoalStatus.STATUS_SUCCEEDED:
-            self.get_logger().info('Goal succeeded! Result: {0}'.format(result.x))tip = np.empty(shape=[0,7])
+            self.get_logger().info('Goal succeeded! Result: {0}'.format(result.x))
+            self.robot_ready = True
 
 def main(args=None):
     rclpy.init(args=args)
 
-    controller_node = ControllerNode()
+    mpc_controller = MPCController()
 
     global P
     global C
-    P = controller_node.get_parameter('P').get_parameter_value().double_value
-    C = controller_node.get_parameter('C').get_parameter_value().double_value
+    P = mpc_controller.get_parameter('P').get_parameter_value().integer_value
+    C = mpc_controller.get_parameter('C').get_parameter_value().integer_value
 
-    rclpy.spin(controller_node)
+    rclpy.spin(mpc_controller)
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
     # when the garbage collector destroys the node object)
-    controller_node.destroy_node()
+    mpc_controller.destroy_node()
     rclpy.shutdown()
 
 if __name__ == '__main__':

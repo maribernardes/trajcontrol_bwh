@@ -137,8 +137,8 @@ class ControllerNode(Node):
         result = future.result().result
         status = future.result().status
         if status == GoalStatus.STATUS_SUCCEEDED:
-            self.get_logger().info('Goal succeeded! Result: {0}'.format(result.x))tip = np.empty(shape=[0,7])
-
+            self.get_logger().info('Goal succeeded! Result: {0}'.format(result.x))
+            self.robot_ready = True
 
 def main(args=None):
     rclpy.init(args=args)

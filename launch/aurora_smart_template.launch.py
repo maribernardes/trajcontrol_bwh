@@ -45,7 +45,8 @@ def generate_launch_description():
 
     controller = Node(
         package="trajcontrol",
-        executable="controller_node"
+        executable="mpc_controller"
+        # executable="controller_node"
     )   
 
     file = Node(
@@ -54,10 +55,6 @@ def generate_launch_description():
         parameters=[{"filename":LaunchConfiguration('filename')}]
     )
 
-    #user = Node(
-    #    package="trajcontrol",
-    #    executable="virtual_UI"
-    #)
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -72,5 +69,4 @@ def generate_launch_description():
         controller,
         robot,
         file
-        #user
     ])

@@ -34,7 +34,8 @@ class EstimatorNode(Node):
         self.subscription_sensor = self.create_subscription(PoseStamped, '/needle/state/pose_filtered', self.sensor_callback, 10)
         self.subscription_sensor # prevent unused variable warning
 
-        #Published topicsCurrentcobian', 10)
+        #Published topics
+        self.publisher_jacobian = self.create_publisher(Image, '/needle/state/jacobian', 10)
         
         # Print numpy floats with only 3 decimal places
         np.set_printoptions(formatter={'float': lambda x: "{0:0.4f}".format(x)})
