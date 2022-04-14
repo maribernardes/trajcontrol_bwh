@@ -23,8 +23,8 @@ from std_msgs.msg import Int8
 
 from datetime import datetime
 
-MM_2_COUNT = 2000.0/2.5349
-COUNT_2_MM = 2.5349/2000.0
+MM_2_COUNT = 10889.0
+COUNT_2_MM = 1.0/10889.0
 
 class VirtualRobot(Node):
 
@@ -81,26 +81,26 @@ class VirtualRobot(Node):
             return str(0)
         return data_temp
 
-    # Timer to publish needle_pose topic      
+    # Timer to publish '/stage/state/needle_pose'  
     def timer_needle_pose_callback(self):
-        # Read needle guide position from robot motors
-        read_position = str(self.getMotorPosition())
-        read_position = read_position[2 : : ]
-        read_position = read_position.replace(':', '')
-        Z = read_position.split(',')
+        if (self.needle_base.size != 0): 
+            # Read needle guide position from robot motors
+            read_position = str(self.getMotorPosition())
+            read_position = read_position[2 : : ]
+            read_position = read_position.replace(':', '')
+            Z = read_position.split(',')
+            # Construct robot message to publish             
+            msg = PoseStamped()
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.header.frame_id = "stage"
+            msg.pose.position.x = float(Z[0])*COUNT_2_MM
+            msg.pose.position.y = float(self.needle_base[1])
+            msg.pose.position.z = float(Z[1])*COUNT_2_MM
+            msg.pose.orientation = Quaternion(x=float(0), y=float(0), z=float(0), w=float(1))
+            self.publisher_needle_pose.publish(msg)
 
-        # Construct robot message to publish             
-        msg = PoseStamped()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = "stage"
-        msg.pose.position.x = float(Z[0])*COUNT_2_MM
-        msg.pose.position.y = float(self.needle_base[1])
-        msg.pose.position.z = float(Z[1])*COUNT_2_MM
-        msg.pose.orientation = Quaternion(x=float(0), y=float(0), z=float(0), w=float(1))
-        self.publisher_needle_pose.publish(msg)
-
-        self.get_logger().info('Needle base: x=%f, y=%f, z=%f, q=[%f, %f, %f, %f] in %s frame'  % (msg.pose.position.x, msg.pose.position.y, \
-            msg.pose.position.z,  msg.pose.orientation.w, msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.header.frame_id))
+            self.get_logger().info('Needle base: x=%f, y=%f, z=%f, q=[%f, %f, %f, %f] in %s frame'  % (msg.pose.position.x, msg.pose.position.y, \
+                msg.pose.position.z,  msg.pose.orientation.w, msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.header.frame_id))
 
     # Initialization after needle is positioned in the entry point (after SPACE hit)
     def entry_callback(self, msg):
@@ -119,12 +119,13 @@ class VirtualRobot(Node):
             # Load stored registration transform
             self.get_logger().info('Loading stored registration transform ...')
             try:
-                self.registration = loadtxt(os.path.join(os.getcwd(),'src','trajcontrol','files','registration.csv'), delimiter=',')
+                self.registration = np.array(loadtxt(os.path.join(os.getcwd(),'src','trajcontrol','files','registration.csv'), delimiter=','))
             except IOError:
                 self.get_logger().info('Could not find registration.csv file')
             self.get_logger().info('Registration = %s' %  (self.registration))
 
-    # Get current Aurora sensor measurements and publishes to '/stage/state/needle_pose'
+    # Get current Aurora sensor measurements
+    # Filter measurement, transform to stage frame and store in self.needle_base
     def aurora_callback(self,msg_sensor):
         # Get needle shape from Aurora IGTL
         name = msg_sensor.name      
@@ -145,8 +146,11 @@ class VirtualRobot(Node):
                     Z_sensor = Z_filt[size_win-1,:]                                  # get last value
                             
                 # Transform from sensor to robot frame
+                self.get_logger().info('Z_sensor = %s' %  (Z_sensor))
+                self.get_logger().info('Registration = %s' %  (self.registration))
                 self.needle_base = pose_transform(Z_sensor, self.registration)
-
+                self.get_logger().info('needle_base = %s' %  (self.needle_base))
+                
     # Destroy de action server
     def destroy(self):
         self._action_server.destroy()

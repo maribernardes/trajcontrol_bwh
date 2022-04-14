@@ -30,13 +30,11 @@ class SensorProcessing(Node):
         self.subscription_keyboard # prevent unused variable warning
         self.listen_keyboard = False
 
-        # #Published topics
-        self.publisher_filtered = self.create_publisher(PoseStamped, '/needle/state/pose_filtered', 10)
-
-        self.publisher_entry_point = self.create_publisher(PoseStamped, '/subject/state/skin_entry', 10)
+        #Published topics
         timer_period = 0.5  # seconds
         self.timer = self.create_timer(timer_period, self.timer_entry_point_callback)
-
+        self.publisher_entry_point = self.create_publisher(PoseStamped, '/subject/state/skin_entry', 10)
+        self.publisher_filtered = self.create_publisher(PoseStamped, '/needle/state/pose_filtered', 10)
 
         #Stored values
         self.registration = np.empty(shape=[0,7])   # Registration transform (from aurora to stage)
@@ -51,7 +49,7 @@ class SensorProcessing(Node):
         ### B = np.array([[x0, x1, ..., xn], [y0, y1, ..., yn], [z0, z1, ..., zn]]) ###
         ###############################################################################
         self.A = np.empty(shape=[3,0])                  # registration points in aurora frame
-        self.B = np.array([[-5, -75, -75, -5, -40, -5, -75, -75, -5, -40], [0, 0, 80, 80, 40, 0, 0, 80, 80, 40], [0, 0, 0, 0, 0, 22.3, 22.3, 22.3, 22.3, 22.3]])     # registration points in stage frame
+        self.B = np.array([[25, 25, 25, 0, 0, 25, 25, 25, 0, 0], [0, 25, 40, 40, 25, 0, 25, 40, 40, 25], [0, 0, 0, 0, 0, 22.3, 22.3, 22.3, 22.3, 22.3]])     # registration points in stage frame
         self.keyboard_request = np.zeros(self.B.shape[1]+1)  # requests for key pressing (1 = already requested / 0 = to be requested). Quantity: #registration points + entry point
 
     def timer_entry_point_callback(self):
@@ -60,13 +58,8 @@ class SensorProcessing(Node):
             msg = PoseStamped()
             msg.header.stamp = self.get_clock().now().to_msg()
             msg.header.frame_id = "stage"
-            msg.pose.position.x = self.entry_point[0]
-            msg.pose.position.y = self.entry_point[1]
-            msg.pose.position.z = self.entry_point[2]
-            msg.pose.orientation.w = self.entry_point[3]
-            msg.pose.orientation.x = self.entry_point[3]
-            msg.pose.orientation.y = self.entry_point[3]
-            msg.pose.orientation.z = self.entry_point[3]
+            msg.pose.position = Point(x=self.entry_point[0], y=self.entry_point[1], z=self.entry_point[2])
+            msg.pose.orientation = Quaternion(w=self.entry_point[3], x=self.entry_point[4], y=self.entry_point[5], z=self.entry_point[6])
             self.publisher_entry_point.publish(msg)
 
     # Get current Aurora sensor measurements and publishes to '/needle/state/pose_filtered'
@@ -94,7 +87,7 @@ class SensorProcessing(Node):
                 
                 # Publish last needle filtered pose in robot frame
                 msg = PoseStamped()
-                # msg.header.stamp = msg_sensor.header.stamp # Use same timestamp from Aurora (Commented it out because Plus has no timestamp)
+                msg.header.stamp = self.get_clock().now().to_msg()
                 msg.header.frame_id = 'stage'
                 msg.pose.position = Point(x=self.Z[0], y=self.Z[1], z=self.Z[2])
                 msg.pose.orientation = Quaternion(w=self.Z[3], x=self.Z[4], y=self.Z[5], z=self.Z[6])
@@ -103,7 +96,7 @@ class SensorProcessing(Node):
     # A keyboard hotkey was pressed 
     def keyboard_callback(self, msg):
         if (msg.data == 10) and (self.registration.size == 0): # ENTER and missing registration
-            if (self.Z_sensor.size == 0):   # No aurora reading to store
+            if self.Z_sensor.size == 0:   # No aurora reading to store
                 self.get_logger().info('There is no sensor reading to store')
             else:
                 P = self.Z_sensor[0,0:3] # Store next registration point
@@ -131,14 +124,14 @@ class SensorProcessing(Node):
                 self.listen_keyboard = False              
             else:
                 # Calculate registration transform
-                self.registration = find_registration(self.A, self.B)   #Store registration transform
+                self.registration = np.array(find_registration(self.A, self.B))   #Store registration transform
                 # Save matrix to file
                 savetxt(os.path.join(os.getcwd(),'src','trajcontrol','files','registration.csv'), asarray(self.registration), delimiter=',')                              
 
         else:    # Load previous registration from file
             self.get_logger().info('Loading stored registration transform ...')
             try:
-                self.registration = loadtxt(os.path.join(os.getcwd(),'src','trajcontrol','files','registration.csv'), delimiter=',')
+                self.registration = np.array(loadtxt(os.path.join(os.getcwd(),'src','trajcontrol','files','registration.csv'), delimiter=','))
 
             except IOError:
                 self.get_logger().info('Could not find registration.csv file')
@@ -230,7 +223,7 @@ def main(args=None):
     # Initialize registration
     while rclpy.ok():
         rclpy.spin_once(sensor_processing)
-        if (sensor_processing.registration.size == 0): #No registration yet
+        if sensor_processing.registration.size == 0: #No registration yet
             sensor_processing.get_registration()
         else:
             sensor_processing.get_logger().info('Registration = %s' %  (sensor_processing.registration))
@@ -239,7 +232,7 @@ def main(args=None):
     # Initialize entry point position
     while rclpy.ok():
         rclpy.spin_once(sensor_processing)
-        if (sensor_processing.entry_point.size == 0): #No entry point yet
+        if sensor_processing.entry_point.size == 0: #No entry point yet
             sensor_processing.get_entry_point()
         else:
             sensor_processing.get_logger().info('Entry point = %s' %  (sensor_processing.entry_point))

@@ -45,11 +45,11 @@ def generate_launch_description():
 
     controller = Node(
         package="trajcontrol",
-        executable="mpc_controller"
-        # executable="controller_node"
+        # executable="mpc_controller"
+        executable="controller_node"
     )   
 
-    file = Node(
+    save_file = Node(
         package="trajcontrol",
         executable="save_file",
         parameters=[{"filename":LaunchConfiguration('filename')}]
@@ -63,10 +63,16 @@ def generate_launch_description():
             description="File name to save .csv file with experimental data"
         ),
         actions.LogInfo(msg=["filename: ", LaunchConfiguration('filename')]),
+        DeclareLaunchArgument(
+            "registration",
+            default_value="0",
+            description="0=load previous / 1=new registration"
+        ),
+        actions.LogInfo(msg=["registration: ", LaunchConfiguration('registration')]),
         aurora,
         sensor,
         estimator,
         controller,
         robot,
-        file
+        save_file,
     ])

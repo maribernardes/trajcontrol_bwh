@@ -15,7 +15,6 @@ from launch.actions import DeclareLaunchArgument
 
 def generate_launch_description():
 
-
     config = os.path.join(
         get_package_share_directory('trajcontrol'),
         'config',
@@ -50,7 +49,19 @@ def generate_launch_description():
         parameters=[config]
     )   
 
+    save_file = Node(
+        package="trajcontrol",
+        executable="save_file",
+        parameters=[{"filename":LaunchConfiguration('filename')}]
+    )
+
     return LaunchDescription([
+        DeclareLaunchArgument(
+            "filename",
+            default_value="my_data",
+            description="File name to save .csv file with experimental data"
+        ),
+        actions.LogInfo(msg=["filename: ", LaunchConfiguration('filename')]),
         DeclareLaunchArgument(
             "registration",
             default_value="0",
@@ -61,4 +72,5 @@ def generate_launch_description():
         sensor,
         estimator,
         controller,
+        save_file,
     ])

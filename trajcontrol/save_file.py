@@ -50,8 +50,9 @@ class SaveFile(Node):
         #Array of data
         header = ['Timestamp sec', 'Timestamp nanosec', \
             'Entry_point x', 'Entry_point y', 'Entry_point z', \
-            'Aurora x', 'Aurora y', 'Aurora z', 'Aurora qw', 'Aurora qx', 'Aurora qy', 'Aurora qz',
+            'AuroraTip x', 'AuroraTip y', 'AuroraTip z', 'AuroraTip qw', 'AuroraTip qx', 'AuroraTip qy', 'AuroraTip qz',
             'Tip x', 'Tip y', 'Tip z', 'Tip qw', 'Tip qx', 'Tip qy', 'Tip qz',
+            'AuroraBase x', 'AuroraBase y', 'AuroraBase z', 'AuroraBase qw', 'AuroraBase qx', 'AuroraBase qy', 'AuroraBase qz',
             'Base x', 'Base y', 'Base z', 'Base qw', 'Base qx', 'Base qy', 'Base qz',
             'J00', 'J01', 'J02', 'J03', 'J04', 'J05', 'J06', \
             'J10', 'J11', 'J12', 'J13', 'J14', 'J15', 'J16', \
@@ -68,8 +69,9 @@ class SaveFile(Node):
             writer.writerow(header) # write a row to the csv file
 
         #Last data received
-        self.entry_point = [0,0,0]      #skin entry point
-        self.aurora = [0,0,0,0,0,0,0]   #aurora data
+        self.entry_point = [0,0,0]          #skin entry point
+        self.aurora_tip = [0,0,0,0,0,0,0]   #aurora tip data
+        self.aurora_base = [0,0,0,0,0,0,0]  #aurora base data
         self.Z = [0,0,0,0,0,0,0]        #needle tip (filtered and transformed to robot frame)
         self.X = [0,0,0,0,0,0,0]        #robot/needle base
         self.J = [0,0,0,0,0,0,0, \
@@ -89,8 +91,12 @@ class SaveFile(Node):
     #Get Aurora data
     def aurora_callback(self, msg):
         aurora = msg.transform
-        self.aurora = [aurora.translation.x, aurora.translation.y, aurora.translation.z, \
-            aurora.rotation.w, aurora.rotation.x, aurora.rotation.y, aurora.rotation.z]
+        if msg.name=="NeedleToTracker": # Name is adjusted in Plus .xml
+            self.aurora_tip = [aurora.translation.x, aurora.translation.y, aurora.translation.z, \
+                aurora.rotation.w, aurora.rotation.x, aurora.rotation.y, aurora.rotation.z]
+        if msg.name=="BaseToTracker": # Name is adjusted in Plus .xml
+            self.aurora_base = [aurora.translation.x, aurora.translation.y, aurora.translation.z, \
+                aurora.rotation.w, aurora.rotation.x, aurora.rotation.y, aurora.rotation.z]
 
     #Get current Z (filtered and in robot frame)
     def sensor_callback(self, msg):
@@ -120,8 +126,9 @@ class SaveFile(Node):
        
         data = [now.sec, now.nanosec, \
             self.entry_point[0], self.entry_point[1], self.entry_point[2], \
-            self.aurora[0], self.aurora[1], self.aurora[2], self.aurora[3], self.aurora[4], self.aurora[5], self.aurora[6], \
+            self.aurora_tip[0], self.aurora_tip[1], self.aurora_tip[2], self.aurora_tip[3], self.aurora_tip[4], self.aurora_tip[5], self.aurora_tip[6], \
             self.Z[0], self.Z[1], self.Z[2], self.Z[3], self.Z[4], self.Z[5], self.Z[6], \
+            self.aurora_base[0], self.aurora_base[1], self.aurora_base[2], self.aurora_base[3], self.aurora_base[4], self.aurora_base[5], self.aurora_base[6], \
             self.X[0], self.X[1], self.X[2], self.X[3], self.X[4], self.X[5], self.X[6], \
             self.J[0], self.J[1], self.J[2], self.J[3], self.J[4], self.J[5], self.J[6], \
             self.J[7], self.J[8], self.J[9], self.J[10], self.J[11], self.J[12], self.J[13], \
