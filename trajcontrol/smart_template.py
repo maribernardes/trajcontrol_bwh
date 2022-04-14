@@ -40,6 +40,8 @@ class VirtualRobot(Node):
         self.subscription_entry_point  # prevent unused variable warning
 
         #Published topics
+        timer_period = 0.5  # seconds
+        self.timer = self.create_timer(timer_period, self.timer_needle_pose_callback)
         self.publisher_needle_pose = self.create_publisher(PoseStamped, '/stage/state/needle_pose', 10)
 
         #Action server
@@ -64,7 +66,7 @@ class VirtualRobot(Node):
         self.entry_point = np.empty(shape=[0,7])    # Initial needle tip pose
         self.registration = np.empty(shape=[0,7])   # Registration transform (from aurora to stage)
         self.aurora = np.empty(shape=[0,7])         # All stored Aurora readings as they are sent
-        self.Z_sensor = np.empty(shape=[0,7])       # Aurora sensor value as sent
+        self.needle_base = np.empty(shape=[0,7])    # Base sensor value (filtered and transformed to stage frame)
 
     def getMotorPosition(self):
         try:
@@ -79,9 +81,30 @@ class VirtualRobot(Node):
             return str(0)
         return data_temp
 
+    # Timer to publish needle_pose topic      
+    def timer_needle_pose_callback(self):
+        # Read needle guide position from robot motors
+        read_position = str(self.getMotorPosition())
+        read_position = read_position[2 : : ]
+        read_position = read_position.replace(':', '')
+        Z = read_position.split(',')
+
+        # Construct robot message to publish             
+        msg = PoseStamped()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = "stage"
+        msg.pose.position.x = float(Z[0])*COUNT_2_MM
+        msg.pose.position.y = float(self.needle_base[1])
+        msg.pose.position.z = float(Z[1])*COUNT_2_MM
+        msg.pose.orientation = Quaternion(x=float(0), y=float(0), z=float(0), w=float(1))
+        self.publisher_needle_pose.publish(msg)
+
+        self.get_logger().info('Needle base: x=%f, y=%f, z=%f, q=[%f, %f, %f, %f] in %s frame'  % (msg.pose.position.x, msg.pose.position.y, \
+            msg.pose.position.z,  msg.pose.orientation.w, msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.header.frame_id))
+
     # Initialization after needle is positioned in the entry point (after SPACE hit)
     def entry_callback(self, msg):
-        if len(self.entry_point) == 0:
+        if (self.entry_point.size == 0):
             self.ser.write(str.encode("DPA=0;"))
             self.ser.write(str.encode("PTA=1;"))
             self.ser.write(str.encode("DPB=0;"))
@@ -100,7 +123,6 @@ class VirtualRobot(Node):
             except IOError:
                 self.get_logger().info('Could not find registration.csv file')
             self.get_logger().info('Registration = %s' %  (self.registration))
-            
 
     # Get current Aurora sensor measurements and publishes to '/stage/state/needle_pose'
     def aurora_callback(self,msg_sensor):
@@ -108,12 +130,12 @@ class VirtualRobot(Node):
         name = msg_sensor.name      
         if name=="BaseToTracker": # Name is adjusted in Plus .xml
             # Get aurora new reading
-            self.Z_sensor = np.array([[msg_sensor.transform.translation.x, msg_sensor.transform.translation.y, msg_sensor.transform.translation.z, \
+            Z_sensor = np.array([[msg_sensor.transform.translation.x, msg_sensor.transform.translation.y, msg_sensor.transform.translation.z, \
                 msg_sensor.transform.rotation.w, msg_sensor.transform.rotation.x, msg_sensor.transform.rotation.y, msg_sensor.transform.rotation.z]])
 
-            # Filter and transform Aurora data only after registration was performed or loaded from file
-            if len(self.registration) != 0: 
-                self.aurora = np.row_stack((self.aurora, self.Z_sensor))
+            # Filter and transform Aurora data only after registration was loaded from file
+            if (self.registration.size != 0): 
+                self.aurora = np.row_stack((self.aurora, Z_sensor))
 
                 # Smooth the measurements with a median filter 
                 n = self.aurora.shape[0]
@@ -123,26 +145,7 @@ class VirtualRobot(Node):
                     Z_sensor = Z_filt[size_win-1,:]                                  # get last value
                             
                 # Transform from sensor to robot frame
-                needle_base = pose_transform(Z_sensor, self.registration)
-
-                # Read needle guide position from robot motors
-                read_position = str(self.getMotorPosition())
-                read_position = read_position[2 : : ]
-                read_position = read_position.replace(':', '')
-                Z = read_position.split(',')
-
-                # Construct robot message to publish             
-                msg = PoseStamped()
-                msg.header.stamp = self.get_clock().now().to_msg()
-                msg.header.frame_id = "stage"
-                msg.pose.position.x = float(Z[0])*COUNT_2_MM
-                msg.pose.position.y = float(needle_base[1])
-                msg.pose.position.z = float(Z[1])*COUNT_2_MM
-                msg.pose.orientation = Quaternion(x=float(0), y=float(0), z=float(0), w=float(1))
-                self.publisher_needle_pose.publish(msg)
-
-                self.get_logger().info('Needle base: x=%f, y=%f, z=%f, q=[%f, %f, %f, %f] in %s frame'  % (msg.pose.position.x, msg.pose.position.y, \
-                    msg.pose.position.z,  msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w, msg.header.frame_id))
+                self.needle_base = pose_transform(Z_sensor, self.registration)
 
     # Destroy de action server
     def destroy(self):
