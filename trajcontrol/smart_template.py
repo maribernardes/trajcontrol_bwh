@@ -4,6 +4,7 @@ import numpy as np
 import ament_index_python 
 import serial
 import time
+import quaternion
 
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -68,12 +69,11 @@ class VirtualRobot(Node):
     def getMotorPosition(self):
         try:
             self.ser.flushInput()
-            time.sleep(0.2)
-            self.ser.write(str.encode("TP;"))
             time.sleep(0.1)
+            self.ser.write(str.encode("TP;"))
+            time.sleep(0.5)
             bytesToRead = self.ser.inWaiting()
             data_temp = self.ser.read(bytesToRead-3)
-            self.get_logger().info('motor position %s'  % (data_temp))
         except:
             self.status = 0
             return str(0)
@@ -128,6 +128,7 @@ class VirtualRobot(Node):
                 # Read needle guide position from robot motors
                 read_position = str(self.getMotorPosition())
                 read_position = read_position[2 : : ]
+                read_position = read_position.replace(':', '')
                 Z = read_position.split(',')
 
                 # Construct robot message to publish             
