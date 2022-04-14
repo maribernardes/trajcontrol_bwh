@@ -51,7 +51,7 @@ class ControllerNode(Node):
     # Get current base pose
     def robot_callback(self, msg_robot):
         # Save base pose only after getting entry point
-        if len(self.entry_point) != 0:
+        if (self.entry_point.size != 0):
             # Get pose from PoseStamped
             robot = msg_robot.pose
             # Get robot position and add the initial entry point (home position)
@@ -75,7 +75,7 @@ class ControllerNode(Node):
         Jc = np.array([J[:,0],J[:,2]]).T
         
         # Send control signal only if robot is ready and after first readings (entry point and current needle tip)
-        if (self.robot_ready == True) and (len(self.entry_point)!= 0) and (len(self.tip) != 0):
+        if (self.robot_ready == True) and (self.entry_point.size != 0) and (self.tip.size != 0):
             target = np.array([[self.entry_point[0,0], self.tip[1,0], self.entry_point[2,0], \
                                 self.tip[3,0], self.tip[4,0], self.tip[5,0], self.tip[6,0]]]).T
 
