@@ -40,7 +40,7 @@ class VirtualRobot(Node):
         self.subscription_entry_point  # prevent unused variable warning
 
         #Published topics
-        timer_period = 0.5  # seconds
+        timer_period = 0.8  # seconds
         self.timer = self.create_timer(timer_period, self.timer_needle_pose_callback)
         self.publisher_needle_pose = self.create_publisher(PoseStamped, '/stage/state/needle_pose', 10)
 
@@ -93,13 +93,13 @@ class VirtualRobot(Node):
             msg = PoseStamped()
             msg.header.stamp = self.get_clock().now().to_msg()
             msg.header.frame_id = "stage"
-            msg.pose.position.x = float(Z[0])*COUNT_2_MM
+            msg.pose.position.x = float(Z[0])*COUNT_2_MM + self.entry_point[0,0]
             msg.pose.position.y = float(self.needle_base[1])
-            msg.pose.position.z = float(Z[1])*COUNT_2_MM
+            msg.pose.position.z = float(Z[1])*COUNT_2_MM + self.entry_point[2,0]
             msg.pose.orientation = Quaternion(x=float(0), y=float(0), z=float(0), w=float(1))
             self.publisher_needle_pose.publish(msg)
 
-            self.get_logger().info('Needle base: x=%f, y=%f, z=%f, q=[%f, %f, %f, %f] in %s frame'  % (msg.pose.position.x, msg.pose.position.y, \
+            self.get_logger().info('needle_pose: x=%f, y=%f, z=%f, q=[%f, %f, %f, %f] in %s frame'  % (msg.pose.position.x, msg.pose.position.y, \
                 msg.pose.position.z,  msg.pose.orientation.w, msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.header.frame_id))
 
     # Initialization after needle is positioned in the entry point (after SPACE hit)
@@ -146,10 +146,8 @@ class VirtualRobot(Node):
                     Z_sensor = Z_filt[size_win-1,:]                                  # get last value
                             
                 # Transform from sensor to robot frame
-                self.get_logger().info('Z_sensor = %s' %  (Z_sensor))
-                self.get_logger().info('Registration = %s' %  (self.registration))
                 self.needle_base = pose_transform(Z_sensor, self.registration)
-                self.get_logger().info('needle_base = %s' %  (self.needle_base))
+                # self.get_logger().info('needle_base = %s' %  (self.needle_base))
                 
     # Destroy de action server
     def destroy(self):
@@ -159,7 +157,7 @@ class VirtualRobot(Node):
     # Accept or reject a client request to begin an action
     # This server allows multiple goals in parallel
     def goal_callback(self, goal_request):
-        self.get_logger().info('Received goal request')
+        # self.get_logger().info('Received goal request')
         return GoalResponse.ACCEPT
 
     # Accept or reject a client request to cancel an action
@@ -172,7 +170,7 @@ class VirtualRobot(Node):
             self.ser.write(str.encode("BG \r"))
             time.sleep(0.1)
             self.ser.write(str.encode("PR 0,0,0,0 \r"))
-            self.get_logger().info("Sent BG to Galil")
+            # self.get_logger().info("Sent BG to Galil")
             return 1
         except:
             self.get_logger().info("*** could not send exec command ***")
@@ -194,7 +192,7 @@ class VirtualRobot(Node):
         send = "PA%s=%d;" % (Channel,int(X))
         self.ser.write(str.encode(send))
         time.sleep(0.1)
-        self.get_logger().info("Sent to Galil PR%s=%d" % (Channel,X))
+        # self.get_logger().info("Sent to Galil PR%s=%d" % (Channel,X))
     #    except:
     #        self.get_logger().info("*** could not send command ***")
     #        return 0
@@ -202,10 +200,11 @@ class VirtualRobot(Node):
 
     # Execute a goal
     async def execute_callback(self, goal_handle):
-        self.get_logger().info('Executing goal...')
+        # self.get_logger().info('Executing goal...')
 
         feedback_msg = MoveStage.Feedback()
-        feedback_msg.x = 0.0
+        feedback_msg.x = self.needle_base[0,0]
+        feedback_msg.z = self.needle_base[1,0]
 
         # Start executing the action
         if goal_handle.is_cancel_requested:
@@ -216,13 +215,13 @@ class VirtualRobot(Node):
         my_goal = goal_handle.request
         # Update control input
         self.send_movement_in_counts(my_goal.x*MM_2_COUNT,"A")
-        self.send_movement_in_counts(my_goal.z*MM_2_COUNT, "B")
+        self.send_movement_in_counts(my_goal.z*MM_2_COUNT,"B")
         self.exec_motion()
 
 
         feedback_msg.x = float(0.0)
 
-        self.get_logger().info('Publishing feedback: {0}'.format(feedback_msg.x))
+        # self.get_logger().info('Publishing feedback: {0}'.format(feedback_msg.x))
 
         # Publish the feedback
         goal_handle.publish_feedback(feedback_msg)
@@ -232,7 +231,7 @@ class VirtualRobot(Node):
         result = MoveStage.Result()
         result.x = feedback_msg.x
 
-        self.get_logger().info('Returning result: {0}'.format(result.x))
+        # self.get_logger().info('Returning result: {0}'.format(result.x))
 
         return result
 

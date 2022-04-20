@@ -17,7 +17,7 @@ class ControllerNode(Node):
         super().__init__('controller_node')
 
         #Declare node parameters
-        self.declare_parameter('K', 0.01) #Controller gain
+        self.declare_parameter('K', -0.001) #Controller gain
 
         #Topics from sensor processing node
         self.subscription_entry_point = self.create_subscription(PoseStamped, '/subject/state/skin_entry', self.entry_callback, 10)
@@ -41,10 +41,10 @@ class ControllerNode(Node):
         self.action_client = ActionClient(self, MoveStage, '/move_stage')
 
         # Stored values
-        self.entry_point = np.empty(shape=[0,7])    # Initial needle tip pose
-        self.tip = np.empty(shape=[0,7])            # Current needle tip pose
-        self.target = np.empty(shape=[0,7])         # Current target pose
-        self.stage = np.empty(shape=[0,2])          # Current stage pose
+        self.entry_point = np.empty(shape=[7,0])    # Initial needle tip pose
+        self.tip = np.empty(shape=[7,0])            # Current needle tip pose
+        self.target = np.empty(shape=[7,0])         # Current target pose
+        self.stage = np.empty(shape=[2,0])          # Current stage pose
         self.cmd = np.zeros((2,1))                  # Control output to the robot stage
         self.robot_ready = True                     # Robot free to new command
 
@@ -56,6 +56,10 @@ class ControllerNode(Node):
             robot = msg_robot.pose
             # Get robot position and add the initial entry point (home position)
             self.stage = np.array([[robot.position.x + self.entry_point[0,0], robot.position.z + self.entry_point[2,0]]]).T
+            # Check if robot reached its goal position
+            if (np.linalg.norm(self.stage - self.cmd) <= 0.2):
+                self.robot_ready = True 
+                self.get_logger().info('Reached control target')
     
     # Get current entry point
     def entry_callback(self, msg):
@@ -93,8 +97,10 @@ class ControllerNode(Node):
             self.send_cmd(float(self.cmd[0])-self.entry_point[0,0], float(self.cmd[1])-self.entry_point[2,0])
             self.robot_ready = False
 
-            self.get_logger().info('Control: x=%f, z=%f - Tip: x=%f, y= %f, z=%f - Target: x=%f, y=%f, z=%f' % (self.cmd[0], self.cmd[1], \
-            self.tip[0,0], self.tip[1,0], self.tip[2,0], target[0,0], target[1,0], target[2,0]))    
+            self.get_logger().info('Tip: x=%f, y= %f, z=%f'   % (self.tip[0,0], self.tip[1,0], self.tip[2,0]))
+            self.get_logger().info('Target: x=%f, y=%f, z=%f' % (target[0,0], target[1,0], target[2,0]))
+            self.get_logger().info('Stage: x=%f, z=%f' % (self.stage[0,0], self.stage[1,0]))
+            self.get_logger().info('Control: x=%f, z=%f' % (self.cmd[0], self.cmd[1]))
 
             # Publish control output
             msg = PointStamped()
@@ -136,9 +142,9 @@ class ControllerNode(Node):
     def get_result_callback(self, future):
         result = future.result().result
         status = future.result().status
-        if status == GoalStatus.STATUS_SUCCEEDED:
-            self.get_logger().info('Goal succeeded! Result: {0}'.format(result.x))
-            self.robot_ready = True
+        # if status == GoalStatus.STATUS_SUCCEEDED:
+            # self.get_logger().info('Goal succeeded! Result: {0}'.format(result.x))
+            # self.robot_ready = True
 
 def main(args=None):
     rclpy.init(args=args)
