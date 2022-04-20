@@ -17,7 +17,7 @@ class ControllerNode(Node):
         super().__init__('controller_node')
 
         #Declare node parameters
-        self.declare_parameter('K', -0.001) #Controller gain
+        self.declare_parameter('K', 0.2) #Controller gain
 
         #Topics from sensor processing node
         self.subscription_entry_point = self.create_subscription(PoseStamped, '/subject/state/skin_entry', self.entry_callback, 10)
@@ -54,10 +54,10 @@ class ControllerNode(Node):
         if (self.entry_point.size != 0):
             # Get pose from PoseStamped
             robot = msg_robot.pose
-            # Get robot position and add the initial entry point (home position)
-            self.stage = np.array([[robot.position.x + self.entry_point[0,0], robot.position.z + self.entry_point[2,0]]]).T
+            # Get robot position
+            self.stage = np.array([[robot.position.x, robot.position.z]]).T
             # Check if robot reached its goal position
-            if (np.linalg.norm(self.stage - self.cmd) <= 0.2):
+            if (np.linalg.norm(self.stage - self.cmd) <= 0.4):
                 self.robot_ready = True 
                 self.get_logger().info('Reached control target')
     
@@ -83,18 +83,21 @@ class ControllerNode(Node):
             target = np.array([[self.entry_point[0,0], self.tip[1,0], self.entry_point[2,0], \
                                 self.tip[3,0], self.tip[4,0], self.tip[5,0], self.tip[6,0]]]).T
 
-            K = self.get_parameter('K').get_parameter_value().double_value      # Get K value          
-            self.cmd = self.stage + K*np.matmul(np.linalg.pinv(Jc),self.tip-target)  # Calculate control output
+            K = self.get_parameter('K').get_parameter_value().double_value          # Get K value          
+#            self.cmd = self.stage + K*np.matmul(np.linalg.pinv(Jc),self.tip-target) # Calculate control output
+            my_tip = np.array([[self.tip[0,0], self.tip[2,0]]]).T 
+            my_target = np.array([[target[0,0], target[2,0]]]).T 
+            
+            self.cmd = self.stage + K*(my_tip - my_target) # Calculate control output
 
             # Limit control output to maximum +-5mm around entry point
-            self.cmd[0] = min(self.cmd[0], self.entry_point[0,0]+5)
-            self.cmd[1] = min(self.cmd[1], self.entry_point[2,0]+5)
-            self.cmd[0] = max(self.cmd[0], self.entry_point[0,0]-5)
-            self.cmd[1] = max(self.cmd[1], self.entry_point[2,0]-5)
+            self.cmd[0] = min(self.cmd[0], self.entry_point[0,0]+10)
+            self.cmd[1] = min(self.cmd[1], self.entry_point[2,0]+10)
+            self.cmd[0] = max(self.cmd[0], self.entry_point[0,0]-10)
+            self.cmd[1] = max(self.cmd[1], self.entry_point[2,0]-10)
 
             # Send command to stage
-            # Subtract the entry point because robot considers initial position to be (0,0)
-            self.send_cmd(float(self.cmd[0])-self.entry_point[0,0], float(self.cmd[1])-self.entry_point[2,0])
+            self.send_cmd(float(self.cmd[0]), float(self.cmd[1]))
             self.robot_ready = False
 
             self.get_logger().info('Tip: x=%f, y= %f, z=%f'   % (self.tip[0,0], self.tip[1,0], self.tip[2,0]))
@@ -104,8 +107,8 @@ class ControllerNode(Node):
 
             # Publish control output
             msg = PointStamped()
-            msg.point.x = float(self.cmd[0]) - self.entry_point[0,0]
-            msg.point.z = float(self.cmd[1]) - self.entry_point[2,0]
+            msg.point.x = float(self.cmd[0])
+            msg.point.z = float(self.cmd[1])
             msg.header.stamp = self.get_clock().now().to_msg()
 
             self.publisher_control.publish(msg)

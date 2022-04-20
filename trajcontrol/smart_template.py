@@ -23,8 +23,8 @@ from std_msgs.msg import Int8
 
 from datetime import datetime
 
-MM_2_COUNT = 10889.0
-COUNT_2_MM = 1.0/10889.0
+MM_2_COUNT = 1088.9
+COUNT_2_MM = 1.0/1088.9
 
 class VirtualRobot(Node):
 
@@ -90,12 +90,17 @@ class VirtualRobot(Node):
             read_position = read_position.replace(':', '')
             Z = read_position.split(',')
             # Construct robot message to publish             
+            # Add the initial entry point (home position)
             msg = PoseStamped()
             msg.header.stamp = self.get_clock().now().to_msg()
             msg.header.frame_id = "stage"
             msg.pose.position.x = float(Z[0])*COUNT_2_MM + self.entry_point[0,0]
             msg.pose.position.y = float(self.needle_base[1])
-            msg.pose.position.z = float(Z[1])*COUNT_2_MM + self.entry_point[2,0]
+            # WARNING: Galil channel B inverted, that is why the my_goal is negative
+            msg.pose.position.z = -float(Z[1])*COUNT_2_MM + self.entry_point[2,0]
+
+            self.get_logger().info('motor read: %s %s ' % (Z[0],Z[2]))
+  
             msg.pose.orientation = Quaternion(x=float(0), y=float(0), z=float(0), w=float(1))
             self.publisher_needle_pose.publish(msg)
 
@@ -106,12 +111,18 @@ class VirtualRobot(Node):
     def entry_callback(self, msg):
         if (self.entry_point.size == 0):
             self.ser.write(str.encode("DPA=0;"))
+            time.sleep(0.02)
             self.ser.write(str.encode("PTA=1;"))
+            time.sleep(0.02)
             self.ser.write(str.encode("DPB=0;"))
+            time.sleep(0.02)
             self.ser.write(str.encode("PTB=1;"))
+            time.sleep(0.02)
             self.ser.write(str.encode("SH;")) #Check this code
             self.AbsoluteMode = True
             self.get_logger().info('Needle guide at position zero')
+
+            # Store entry point
             entry_point = msg.pose
             self.entry_point = np.array([[entry_point.position.x, entry_point.position.y, entry_point.position.z, \
                                 entry_point.orientation.w, entry_point.orientation.x, entry_point.orientation.y, entry_point.orientation.z]]).T
@@ -177,12 +188,12 @@ class VirtualRobot(Node):
             return 0
 
     def check_limits(self,X,Channel):
-        if X > 5*MM_2_COUNT:
+        if X > 10*MM_2_COUNT:
             self.get_logger().info("Limit reach at axis %s" % (Channel))
-            X = 5*MM_2_COUNT
-        elif X < -5*MM_2_COUNT:
+            X = 10*MM_2_COUNT
+        elif X < -10*MM_2_COUNT:
             self.get_logger().info("Limit reach at axis %s" % (Channel))
-            X = -5*MM_2_COUNT
+            X = -10*MM_2_COUNT
         return X
 
     def send_movement_in_counts(self,X,Channel):
@@ -192,7 +203,7 @@ class VirtualRobot(Node):
         send = "PA%s=%d;" % (Channel,int(X))
         self.ser.write(str.encode(send))
         time.sleep(0.1)
-        # self.get_logger().info("Sent to Galil PR%s=%d" % (Channel,X))
+        self.get_logger().info("Sent to Galil PA%s=%d" % (Channel,X))
     #    except:
     #        self.get_logger().info("*** could not send command ***")
     #        return 0
@@ -203,8 +214,9 @@ class VirtualRobot(Node):
         # self.get_logger().info('Executing goal...')
 
         feedback_msg = MoveStage.Feedback()
-        feedback_msg.x = self.needle_base[0,0]
-        feedback_msg.z = self.needle_base[1,0]
+        #TODO
+        feedback_msg.x = 0.0 #self.needle_base[0,0]
+        feedback_msg.z = 0.0 #self.needle_base[1,0]
 
         # Start executing the action
         if goal_handle.is_cancel_requested:
@@ -212,11 +224,15 @@ class VirtualRobot(Node):
             self.get_logger().info('Goal canceled')
             return MoveStage.Result()
 
+        # Subtract entry point from goal because robot considers initial position to be (0,0)
         my_goal = goal_handle.request
+        my_goal.x = my_goal.x - self.entry_point[0,0]
+        my_goal.z = my_goal.z - self.entry_point[2,0]
+
         # Update control input
         self.send_movement_in_counts(my_goal.x*MM_2_COUNT,"A")
-        self.send_movement_in_counts(my_goal.z*MM_2_COUNT,"B")
-        self.exec_motion()
+        # WARNING: Galil channel B inverted, that is why the my_goal is negative
+        self.send_movement_in_counts(-my_goal.z*MM_2_COUNT,"B")
 
 
         feedback_msg.x = float(0.0)
