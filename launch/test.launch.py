@@ -40,7 +40,7 @@ def generate_launch_description():
 
     controller = Node(
         package="trajcontrol",
-        executable="mpc_controller"
+        executable="controller_node"
     )   
 
     file = Node(

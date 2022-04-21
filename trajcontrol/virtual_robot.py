@@ -1,3 +1,4 @@
+from sympy import Point3D
 import rclpy
 import os
 import numpy as np
@@ -9,10 +10,9 @@ from rclpy.node import Node
 from stage_control_interfaces.action import MoveStage
 
 from geometry_msgs.msg import PoseStamped
-from geometry_msgs.msg import Quaternion
+from geometry_msgs.msg import Quaternion, Point
 from transforms3d.euler import euler2quat
 from scipy.io import loadmat
-
 
 class VirtualRobot(Node):
 
@@ -22,9 +22,13 @@ class VirtualRobot(Node):
         #Declare node parameters
         self.declare_parameter('dataset', 'fbg_10') #Dataset file name
 
+        #Topics from sensor processing node
+        self.subscription_entry_point = self.create_subscription(PoseStamped, '/subject/state/skin_entry', self.entry_callback, 10)
+        self.subscription_entry_point  # prevent unused variable warning
+
         #Published topics
         self.publisher_needle_pose = self.create_publisher(PoseStamped, '/stage/state/needle_pose', 10)
-        timer_period = 0.5  # seconds
+        timer_period = 0.8  # seconds
         self.timer = self.create_timer(timer_period, self.timer_needlepose_callback)
 
         #Action server
@@ -35,36 +39,41 @@ class VirtualRobot(Node):
         file_path = os.path.join('src','trajcontrol','files',self.get_parameter('dataset').get_parameter_value().string_value+ '.mat') #String with full path to file
         trial_data = loadmat(file_path, mat_dtype=True)
         
+        # Stored values
+        self.entry_point = np.empty(shape=[7,0])    # Initial needle tip pose
         self.needle_pose = trial_data['needle_pose'][0]
         self.time_stamp = trial_data['time_stamp'][0]
         self.i = 0
-        
+
+    # Get current entry point
+    def entry_callback(self, msg):
+        entry_point = msg.pose
+        self.entry_point = np.array([[entry_point.position.x, entry_point.position.y, entry_point.position.z, \
+                                entry_point.orientation.w, entry_point.orientation.x, entry_point.orientation.y, entry_point.orientation.z]]).T
+
     # Publish current needle_pose
     def timer_needlepose_callback(self):
+        # Publish needle_pose only after entry point is acquired
+        if (self.entry_point.size != 0):
+            # Use Aurora timestamp
+            now = self.get_clock().now().to_msg()
+            decimal = np.mod(self.time_stamp[self.i],1)
+            now.nanosec = int(decimal*1e9)
+            now.sec = int(self.time_stamp[self.i]-decimal)
+            
+            msg = PoseStamped()
+            msg.header.stamp = now
+            msg.header.frame_id = "stage"
 
-        # Use Aurora timestamp
-        now = self.get_clock().now().to_msg()
-        decimal = np.mod(self.time_stamp[self.i],1)
-        now.nanosec = int(decimal*1e9)
-        now.sec = int(self.time_stamp[self.i]-decimal)
-        
-        msg = PoseStamped()
-        msg.header.stamp = now
-        msg.header.frame_id = "stage"
+            # Populate message with Z data from matlab file and previous control input
+            Z = self.needle_pose[self.i]
+            new_rand = np.random.randn(2,1)
+            msg.pose.position = Point(x=self.entry_point[0,0]+0.1*new_rand[0,0], y=Z[1,0], z=self.entry_point[2,0]+0.1*new_rand[1,0])
+            msg.pose.orientation = Quaternion(x=float(Z[3,0]), y=float(Z[4,0]), z=float(Z[5,0]), w=float(Z[6,0]))
 
-        # Populate message with Z data from matlab file
-        Z = self.needle_pose[self.i]
-        msg.pose.position.x = float(Z[0])
-        msg.pose.position.y = float(Z[1])
-        msg.pose.position.z = float(Z[2])
-
-        msg.pose.orientation = Quaternion(x=float(Z[3]), y=float(Z[4]), z=float(Z[5]), w=float(Z[6]))
-
-        self.publisher_needle_pose.publish(msg)
-        #self.get_logger().info('Publish - Needle pose %i: x=%f, y=%f, z=%f, q=[%f, %f, %f, %f] in %s frame'  % (self.i, msg.pose.position.x, \
-        #    msg.pose.position.y, msg.pose.position.z,  msg.pose.orientation.x, \
-        #    msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w, msg.header.frame_id))
-        self.i += 1
+            self.publisher_needle_pose.publish(msg)
+            self.get_logger().info('Publish - Needle pose: %s'  % (msg.pose))
+            self.i += 1
 
     # Destroy de action server
     def destroy(self):
