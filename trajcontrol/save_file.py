@@ -44,7 +44,7 @@ class SaveFile(Node):
 
         
         #Published topics
-        timer_period = 0.5  # seconds
+        timer_period = 0.2  # seconds
         self.timer = self.create_timer(timer_period, self.write_file_callback)
 
         #Array of data

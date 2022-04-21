@@ -57,7 +57,6 @@ class EstimatorNode(Node):
     # Z = [x_tip, y_tip, z_tip, q_tip] (Obs: for q, roll=pitch)
     def sensor_callback(self, msg_sensor):
         # Get filtered sensor in robot frame        
-        self.get_logger().info('Get Z')
         self.Z = np.array([[msg_sensor.pose.position.x, msg_sensor.pose.position.y, msg_sensor.pose.position.z, \
             msg_sensor.pose.orientation.w, msg_sensor.pose.orientation.x, msg_sensor.pose.orientation.y, msg_sensor.pose.orientation.z]]).T
 
@@ -94,7 +93,7 @@ class EstimatorNode(Node):
             msg.header.stamp = self.get_clock().now().to_msg()
 
             self.publisher_jacobian.publish(msg)
-            self.get_logger().info('Publish - Jacobian: %s' %  self.J)
+            # self.get_logger().info('Publish - Jacobian: %s' %  self.J)
 
             # Save last readings
             self.Zant = self.Z
@@ -105,11 +104,9 @@ class EstimatorNode(Node):
         # First readings: initialize variables
         else:
             if (self.Z.size != 0):
-                self.get_logger().info('Get first Zant')
                 self.Zant = self.Z
                 self.TZant = self.TXant #For now, consider simultaneous robot and Aurora readings
             # From robot, get input X
-            self.get_logger().info('Get first Xant')
             self.Xant = np.array([[robot.position.x, robot.position.y, robot.position.z, \
                 robot.orientation.w, robot.orientation.x, robot.orientation.y, robot.orientation.z]]).T
             self.TXant = msg_robot.header.stamp

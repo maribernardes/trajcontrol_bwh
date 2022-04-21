@@ -17,7 +17,7 @@ class ControllerNode(Node):
         super().__init__('controller_node')
 
         #Declare node parameters
-        self.declare_parameter('K', 0.2) #Controller gain
+        self.declare_parameter('K', 0.50) #Controller gain
 
         #Topics from sensor processing node
         self.subscription_entry_point = self.create_subscription(PoseStamped, '/subject/state/skin_entry', self.entry_callback, 10)
@@ -87,14 +87,14 @@ class ControllerNode(Node):
 #            self.cmd = self.stage + K*np.matmul(np.linalg.pinv(Jc),self.tip-target) # Calculate control output
             my_tip = np.array([[self.tip[0,0], self.tip[2,0]]]).T 
             my_target = np.array([[target[0,0], target[2,0]]]).T 
-            
-            self.cmd = self.stage + K*(my_tip - my_target) # Calculate control output
+            err = my_tip - my_target
+            self.cmd = self.stage + K*(err) # Calculate control output
 
             # Limit control output to maximum +-5mm around entry point
-            self.cmd[0] = min(self.cmd[0], self.entry_point[0,0]+10)
-            self.cmd[1] = min(self.cmd[1], self.entry_point[2,0]+10)
-            self.cmd[0] = max(self.cmd[0], self.entry_point[0,0]-10)
-            self.cmd[1] = max(self.cmd[1], self.entry_point[2,0]-10)
+            self.cmd[0] = min(self.cmd[0], self.entry_point[0,0]+5)
+            self.cmd[1] = min(self.cmd[1], self.entry_point[2,0]+5)
+            self.cmd[0] = max(self.cmd[0], self.entry_point[0,0]-5)
+            self.cmd[1] = max(self.cmd[1], self.entry_point[2,0]-5)
 
             # Send command to stage
             self.send_cmd(float(self.cmd[0]), float(self.cmd[1]))
@@ -104,6 +104,7 @@ class ControllerNode(Node):
             self.get_logger().info('Target: x=%f, y=%f, z=%f' % (target[0,0], target[1,0], target[2,0]))
             self.get_logger().info('Stage: x=%f, z=%f' % (self.stage[0,0], self.stage[1,0]))
             self.get_logger().info('Control: x=%f, z=%f' % (self.cmd[0], self.cmd[1]))
+            self.get_logger().info('Err: x=%f, z=%f'   % (err[0,0], err[1,0]))
 
             # Publish control output
             msg = PointStamped()
