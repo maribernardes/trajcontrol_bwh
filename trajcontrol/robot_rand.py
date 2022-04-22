@@ -11,10 +11,10 @@ from sensor_msgs.msg import Image
 from stage_control_interfaces.action import MoveStage
 
 
-class RobotCmd(Node):
+class RobotRand(Node):
 
     def __init__(self):
-        super().__init__('robot_cmd')
+        super().__init__('robot_rand')
 
         #Topics from sensor processing node
         self.subscription_entry_point = self.create_subscription(PoseStamped, '/subject/state/skin_entry', self.entry_callback, 10)
@@ -128,14 +128,14 @@ class RobotCmd(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    robot_cmd = RobotCmd()
+    robot_rand = RobotRand()
 
-    rclpy.spin(robot_cmd)
+    rclpy.spin(robot_rand)
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
     # when the garbage collector destroys the node object)
-    robot_cmd.destroy_node()
+    robot_rand.destroy_node()
     rclpy.shutdown()
 
 if __name__ == '__main__':
