@@ -45,8 +45,9 @@ def generate_launch_description():
 
     controller = Node(
         package="trajcontrol",
-        executable="controller_node",
-        # executable="mpc_controller"
+        # executable="controller_node",
+        # executable="mpc_controller",
+        executable="robot_cmd",
         parameters=[config]
     )   
 

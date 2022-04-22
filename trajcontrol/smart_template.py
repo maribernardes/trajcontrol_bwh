@@ -56,11 +56,18 @@ class VirtualRobot(Node):
             print(self.ser.is_open)
         except:
             try:
-               self.ser = serial.Serial('/dev/ttyUSB2', baudrate=115200, timeout=1)  # open serial port
-               self.get_logger().info('Serial connection open ttyUSB2')
-               print(self.ser.is_open)
+                self.ser = serial.Serial('/dev/ttyUSB2', baudrate=115200, timeout=1)  # open serial port
+                self.get_logger().info('Serial connection open ttyUSB2')
+                print(self.ser.is_open)
             except:
-               self.get_logger().info('Could not open Serial connection')
+                try:
+                    self.ser = serial.Serial('/dev/ttyUSB3', baudrate=115200, timeout=1)  # open serial port
+                    self.get_logger().info('Serial connection open ttyUSB3')
+                    print(self.ser.is_open)
+                except:
+                    self.get_logger().info('Could not open Serial connection')
+
+
 
         #Stored values
         self.entry_point = np.empty(shape=[0,7])    # Initial needle tip pose
