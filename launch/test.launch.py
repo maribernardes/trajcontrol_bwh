@@ -40,7 +40,8 @@ def generate_launch_description():
 
     controller = Node(
         package="trajcontrol",
-        executable="controller_node"
+        executable="robot_cmd"
+        # executable="controller_node"
     )   
 
     file = Node(

@@ -24,7 +24,7 @@ class SaveFile(Node):
         self.subscription_robot = self.create_subscription(PoseStamped, '/stage/state/needle_pose', self.robot_callback, 10)
         self.subscription_robot # prevent unused variable warning
 
-        #Topics from aurora node
+        #Topics from aurora node (NeedleToTracker and BaseToTracker sensors)
         self.subscription_aurora = self.create_subscription(Transform, 'IGTL_TRANSFORM_IN', self.aurora_callback, 10)
         self.subscription_aurora # prevent unused variable warning
 
@@ -44,7 +44,7 @@ class SaveFile(Node):
 
         
         #Published topics
-        timer_period = 0.2  # seconds
+        timer_period = 0.1  # seconds
         self.timer = self.create_timer(timer_period, self.write_file_callback)
 
         #Array of data

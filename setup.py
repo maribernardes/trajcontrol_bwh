@@ -35,6 +35,7 @@ setup(
             'controller_node = trajcontrol.controller_node:main',
             'mpc_controller = trajcontrol.mpc_controller:main',
             'save_file = trajcontrol.save_file:main',
+            'robot_cmd = trajcontrol.robot_cmd:main',
         ],
     },
 )
