@@ -16,7 +16,8 @@ class Keypress(Node):
 
     def timer_keyboard_callback(self):
         k = ord(getch.getch())  # this is used to convert the keypress event in the keyboard or joypad , joystick to a ord value
-        if (k==10) or (k==32):# to filter only desired keys: 10=ENTER, 32=SPACE
+        # to filter only desired keys: 10=ENTER, 32=SPACE, 50=down_numkey, 52=left_numkey, 54=right_numkey, 56=up_numkey
+        if (k==10) or (k==32) or (k==50) or (k==52) or (k==54) or (k==56):
             msg = Int8()
             msg.data = k
             self.publisher.publish(msg)

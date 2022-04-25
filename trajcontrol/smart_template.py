@@ -26,7 +26,7 @@ from datetime import datetime
 MM_2_COUNT = 1088.9
 COUNT_2_MM = 1.0/1088.9
 
-class VirtualRobot(Node):
+class SmartTemplate(Node):
 
     def __init__(self):
         super().__init__('smart_template')      
@@ -289,17 +289,17 @@ def pose_transform(x_orig, x_tf):
 def main(args=None):
     rclpy.init(args=args)
 
-    virtual_robot = VirtualRobot()
+    smart_template = SmartTemplate()
 
     # Use a MultiThreadedExecutor to enable processing goals concurrently
     executor = MultiThreadedExecutor()
 
-    rclpy.spin(virtual_robot, executor=executor)
+    rclpy.spin(smart_template, executor=executor)
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
     # when the garbage collector destroys the node object)
-    virtual_robot.destroy_node()
+    smart_template.destroy_node()
     rclpy.shutdown()
 
 
