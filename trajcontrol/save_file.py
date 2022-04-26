@@ -20,10 +20,6 @@ class SaveFile(Node):
         self.declare_parameter('filename', 'my_data') #Name of file where data values are saved
         self.filename = os.path.join(os.getcwd(),'src','trajcontrol','data',self.get_parameter('filename').get_parameter_value().string_value + '.csv') #String with full path to file
 
-        #Topics from robot node
-        self.subscription_robot = self.create_subscription(PoseStamped, '/stage/state/needle_pose', self.robot_callback, 10)
-        self.subscription_robot # prevent unused variable warning
-
         #Topics from aurora node (NeedleToTracker and BaseToTracker sensors)
         self.subscription_aurora = self.create_subscription(Transform, 'IGTL_TRANSFORM_IN', self.aurora_callback, 10)
         self.subscription_aurora # prevent unused variable warning
