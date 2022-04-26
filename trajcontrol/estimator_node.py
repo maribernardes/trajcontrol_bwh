@@ -22,13 +22,11 @@ class EstimatorNode(Node):
         #Declare node parameters
         self.declare_parameter('alpha', 0.65) #Jacobian update parameter
 
-        #Topics from robot node
-        self.subscription_robot = self.create_subscription(PoseStamped, '/stage/state/needle_pose', self.robot_callback, 10)
-        self.subscription_robot # prevent unused variable warning
-
         #Topics from sensor processing node
-        self.subscription_sensor = self.create_subscription(PoseStamped, '/needle/state/pose_filtered', self.sensor_callback, 10)
+        self.subscription_sensor = self.create_subscription(PoseStamped, '/sensor/tip_filtered', self.sensor_callback, 10)
         self.subscription_sensor # prevent unused variable warning
+        self.subscription_robot = self.create_subscription(PoseStamped, '/sensor/base_filtered', self.robot_callback, 10)
+        self.subscription_robot # prevent unused variable warning
 
         #Published topics
         self.publisher_jacobian = self.create_publisher(Image, '/needle/state/jacobian', 10)

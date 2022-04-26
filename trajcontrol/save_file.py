@@ -29,8 +29,10 @@ class SaveFile(Node):
         self.subscription_aurora # prevent unused variable warning
 
         #Topics from sensor processing node
-        self.subscription_sensor = self.create_subscription(PoseStamped, '/needle/state/pose_filtered', self.sensor_callback, 10)
-        self.subscription_sensor # prevent unused variable warning
+        self.subscription_sensortip = self.create_subscription(PoseStamped, '/sensor/tip_filtered', self.sensortip_callback, 10)
+        self.subscription_sensortip # prevent unused variable warning
+        self.subscription_sensorbase = self.create_subscription(PoseStamped, '/sensor/base_filtered', self.sensorbase_callback, 10)
+        self.subscription_sensorbase # prevent unused variable warning
         self.subscription_UI = self.create_subscription(PoseStamped, '/subject/state/skin_entry', self.entry_point_callback, 10)
         self.subscription_UI  # prevent unused variable warning
 
@@ -44,7 +46,7 @@ class SaveFile(Node):
 
         
         #Published topics
-        timer_period = 0.1  # seconds
+        timer_period = 0.05  # seconds
         self.timer = self.create_timer(timer_period, self.write_file_callback)
 
         #Array of data
@@ -99,17 +101,17 @@ class SaveFile(Node):
                 aurora.rotation.w, aurora.rotation.x, aurora.rotation.y, aurora.rotation.z]
 
     #Get current Z (filtered and in robot frame)
-    def sensor_callback(self, msg):
-        sensor = msg.pose
-        self.Z = [sensor.position.x, sensor.position.y, sensor.position.z, \
-            sensor.orientation.w, sensor.orientation.x, sensor.orientation.y, sensor.orientation.z]
+    def sensortip_callback(self, msg):
+        tip = msg.pose
+        self.Z = [tip.position.x, tip.position.y, tip.position.z, \
+            tip.orientation.w, tip.orientation.x, tip.orientation.y, tip.orientation.z]
         #self.get_logger().info('Received Z = %s in %s frame' % (self.Z, msg.header.frame_id))
 
     #Get current X
-    def robot_callback(self, msg):
-        robot = msg.pose
-        self.X = [robot.position.x, robot.position.y, robot.position.z, \
-            robot.orientation.w, robot.orientation.x, robot.orientation.y, robot.orientation.z]
+    def sensorbase_callback(self, msg):
+        base = msg.pose
+        self.X = [base.position.x, base.position.y, base.position.z, \
+            base.orientation.w, base.orientation.x, base.orientation.y, base.orientation.z]
         #self.get_logger().info('Received X = %s in %s frame' % (self.X, msg.header.frame_id))
         
     #Get current J

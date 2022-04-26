@@ -47,7 +47,7 @@ def generate_launch_description():
         package="trajcontrol",
         # executable="controller_node",
         # executable="mpc_controller",
-        executable="robot_cmd",
+        executable="robot_rand",
         parameters=[config]
     )   
 
