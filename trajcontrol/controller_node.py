@@ -22,11 +22,9 @@ class ControllerNode(Node):
         #Topics from sensor processing node
         self.subscription_entry_point = self.create_subscription(PoseStamped, '/subject/state/skin_entry', self.entry_callback, 10)
         self.subscription_entry_point  # prevent unused variable warning
-        self.subscription_tip = self.create_subscription(PoseStamped, '/needle/state/pose_filtered', self.tip_callback, 10)
+        self.subscription_tip = self.create_subscription(PoseStamped, '/sensor/tip_filtered', self.tip_callback, 10)
         self.subscription_tip  # prevent unused variable warning
-
-        #Topics from robot node
-        self.subscription_robot = self.create_subscription(PoseStamped, '/stage/state/needle_pose', self.robot_callback, 10)
+        self.subscription_robot = self.create_subscription(PoseStamped, '/sensor/base_filtered', self.robot_callback, 10)
         self.subscription_robot # prevent unused variable warning
 
         #Topics from estimator node

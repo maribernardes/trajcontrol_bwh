@@ -33,15 +33,20 @@ class SensorProcessing(Node):
         #Published topics
         timer_period = 0.5  # seconds
         self.timer = self.create_timer(timer_period, self.timer_entry_point_callback)
+        
         self.publisher_entry_point = self.create_publisher(PoseStamped, '/subject/state/skin_entry', 10)
-        self.publisher_filtered = self.create_publisher(PoseStamped, '/needle/state/pose_filtered', 10)
+        self.publisher_tipfiltered = self.create_publisher(PoseStamped, '/sensor/tip_filtered', 10)
+        self.publisher_basefiltered = self.create_publisher(PoseStamped,'/sensor/base_filtered', 10)
 
         #Stored values
         self.registration = np.empty(shape=[0,7])   # Registration transform (from aurora to stage)
-        self.aurora = np.empty(shape=[0,7])         # All stored Aurora readings as they are sent
-        self.Z_sensor = np.empty(shape=[0,7])       # Aurora sensor value as sent
-        self.Z = np.empty(shape=[0,7])              # Filtered aurora value in robot frame
         self.entry_point = np.empty(shape=[0,7])    # Tip position at begining of insertion
+        self.auroraZ = np.empty(shape=[0,7])        # All stored Aurora tip readings as they are sent
+        self.Z_sensor = np.empty(shape=[0,7])       # Aurora tip sensor value as sent
+        self.Z = np.empty(shape=[0,7])              # Filtered aurora tip value in robot frame
+        self.auroraX = np.empty(shape=[0,7])        # All stored Aurora base readings as they are sent
+        self.X_sensor = np.empty(shape=[0,7])       # Aurora base sensor value as sent
+        self.X = np.empty(shape=[0,7])              # Filtered aurora basevalue in robot frame
 
         # Registration points A (aurora) and B (stage)
         ###############################################################################
@@ -73,13 +78,13 @@ class SensorProcessing(Node):
 
             # Filter and transform Aurora data only after registration was performed or loaded from file
             if (self.registration.size != 0): 
-                self.aurora = np.row_stack((self.aurora, self.Z_sensor))
+                self.auroraZ = np.row_stack((self.auroraZ, self.Z_sensor))
 
                 # Smooth the measurements with a median filter 
-                n = self.aurora.shape[0]
+                n = self.auroraZ.shape[0]
                 size_win = min(n, 500) #array window size
                 if (size_win>0): 
-                    Z_filt = median_filter(self.aurora[n-size_win:n,:], size=(40,1)) # use 40 samples median filter (column-wise)
+                    Z_filt = median_filter(self.auroraZ[n-size_win:n,:], size=(40,1)) # use 40 samples median filter (column-wise)
                     Z_sensor = Z_filt[size_win-1,:]                                  # get last value
                             
                 # Transform from sensor to robot frame
@@ -91,8 +96,35 @@ class SensorProcessing(Node):
                 msg.header.frame_id = 'stage'
                 msg.pose.position = Point(x=self.Z[0], y=self.Z[1], z=self.Z[2])
                 msg.pose.orientation = Quaternion(w=self.Z[3], x=self.Z[4], y=self.Z[5], z=self.Z[6])
-                self.publisher_filtered.publish(msg)
+                self.publisher_tipfiltered.publish(msg)
     
+        if name=="BaseToTracker": # Name is adjusted in Plus .xml
+            # Get aurora new reading
+            self.X_sensor = np.array([[msg_sensor.transform.translation.x, msg_sensor.transform.translation.y, msg_sensor.transform.translation.z, \
+                msg_sensor.transform.rotation.w, msg_sensor.transform.rotation.x, msg_sensor.transform.rotation.y, msg_sensor.transform.rotation.z]])
+
+            # Filter and transform Aurora data only after registration was loaded from file
+            if (self.registration.size != 0): 
+                self.auroraX = np.row_stack((self.auroraX, self.X_sensor))
+
+                # Smooth the measurements with a median filter 
+                n = self.auroraX.shape[0]
+                size_win = min(n, 500) #array window size
+                if (size_win>0): 
+                    X_filt = median_filter(self.auroraX[n-size_win:n,:], size=(40,1)) # use 40 samples median filter (column-wise)
+                    X_sensor = X_filt[size_win-1,:]                                  # get last value
+                            
+                # Transform from sensor to robot frame
+                self.X = pose_transform(X_sensor, self.registration)
+
+                # Publish last needle filtered pose in robot frame
+                msg = PoseStamped()
+                msg.header.stamp = self.get_clock().now().to_msg()
+                msg.header.frame_id = 'stage'
+                msg.pose.position = Point(x=self.X[0], y=self.X[1], z=self.X[2])
+                msg.pose.orientation = Quaternion(w=self.X[3], x=self.X[4], y=self.X[5], z=self.X[6])
+                self.publisher_basefiltered.publish(msg)
+
     # A keyboard hotkey was pressed 
     def keyboard_callback(self, msg):
         if (msg.data == 10) and (self.registration.size == 0): # ENTER and missing registration
