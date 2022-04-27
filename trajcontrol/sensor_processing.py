@@ -13,6 +13,8 @@ from std_msgs.msg import Int8
 from geometry_msgs.msg import PoseStamped, Point, Quaternion
 from scipy.ndimage import median_filter
 
+DIST_NEEDLE_BASE = 30.9
+
 class SensorProcessing(Node):
 
     def __init__(self):
@@ -117,13 +119,15 @@ class SensorProcessing(Node):
                 # Transform from sensor to robot frame
                 self.X = pose_transform(X_sensor, self.registration)
 
-                # Publish last needle filtered pose in robot frame
-                msg = PoseStamped()
-                msg.header.stamp = self.get_clock().now().to_msg()
-                msg.header.frame_id = 'stage'
-                msg.pose.position = Point(x=self.X[0], y=self.X[1], z=self.X[2])
-                msg.pose.orientation = Quaternion(w=self.X[3], x=self.X[4], y=self.X[5], z=self.X[6])
-                self.publisher_basefiltered.publish(msg)
+                # Publish only after entry point is defined
+                if (self.entry_point.size != 0): 
+                    # Publish last needle filtered pose in robot frame
+                    msg = PoseStamped()
+                    msg.header.stamp = self.get_clock().now().to_msg()
+                    msg.header.frame_id = 'stage'
+                    msg.pose.position = Point(x=self.X[0], y=self.X[1], z=self.X[2]-DIST_NEEDLE_BASE)
+                    msg.pose.orientation = Quaternion(w=self.X[3], x=self.X[4], y=self.X[5], z=self.X[6])
+                    self.publisher_basefiltered.publish(msg)
 
     # A keyboard hotkey was pressed 
     def keyboard_callback(self, msg):

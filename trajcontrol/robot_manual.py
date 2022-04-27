@@ -1,6 +1,7 @@
 import rclpy
 import numpy as np
 import time
+import serial
 
 from std_msgs.msg import Int8
 from rclpy.node import Node
@@ -10,10 +11,12 @@ from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped, PointStamped
 from stage_control_interfaces.action import MoveStage
 
-MM_2_COUNT = 1088.9
-COUNT_2_MM = 1.0/1088.9
+MM_2_COUNT = 1170.8 #1088.9
+COUNT_2_MM = 1.0/1170.8
 
-DELTA_MM = 0.2  #Increment for manual movement
+DELTA_MM = 3.0  #Increment for manual movement
+
+LIMIT = 5.0
 
 class RobotManual(Node):
 
@@ -24,9 +27,25 @@ class RobotManual(Node):
         self.subscription_keyboard = self.create_subscription(Int8, '/keyboard/key', self.keyboard_callback, 10)
         self.subscription_keyboard # prevent unused variable warning
 
-        #Action client 
-        #Check the correct action name and msg type from John's code
-        self.action_client = ActionClient(self, MoveStage, '/move_stage')
+        #Start serial communication
+        try:
+            self.ser = serial.Serial('/dev/ttyUSB1', baudrate=115200, timeout=1)  # open serial port
+            self.connectionStatus = True
+            self.get_logger().info('Serial connection open ttyUSB1')
+            print(self.ser.is_open)
+        except:
+            try:
+                self.ser = serial.Serial('/dev/ttyUSB2', baudrate=115200, timeout=1)  # open serial port
+                self.get_logger().info('Serial connection open ttyUSB2')
+                print(self.ser.is_open)
+            except:
+                try:
+                    self.ser = serial.Serial('/dev/ttyUSB3', baudrate=115200, timeout=1)  # open serial port
+                    self.get_logger().info('Serial connection open ttyUSB3')
+                    print(self.ser.is_open)
+                except:
+                    self.get_logger().info('Could not open Serial connection')
+
 
         #Initialize robot at current position
         self.ser.write(str.encode("DPA=0;"))
@@ -41,20 +60,24 @@ class RobotManual(Node):
         self.AbsoluteMode = True
 
     def check_limits(self,X,Channel):
-        if X > 10*MM_2_COUNT:
+        if X > LIMIT*MM_2_COUNT:
             self.get_logger().info("Limit reach at axis %s" % (Channel))
-            X = 10*MM_2_COUNT
-        elif X < -10*MM_2_COUNT:
+            X = LIMIT*MM_2_COUNT
+        elif X < -LIMIT*MM_2_COUNT:
             self.get_logger().info("Limit reach at axis %s" % (Channel))
-            X = -10*MM_2_COUNT
+            X = -LIMIT*MM_2_COUNT
         return X
 
     def send_movement_in_counts(self,X,Channel):
         X = self.check_limits(X,Channel)
-        send = "PA%s=%d;" % (Channel,int(X))
+        send = "PR%s=%d;" % (Channel,int(X))
         self.ser.write(str.encode(send))
         time.sleep(0.1)
-        self.get_logger().info("Sent to Galil PA%s=%d" % (Channel,X))
+        send = "BG%s;" % (Channel)
+        self.ser.write(str.encode(send))
+        time.sleep(0.1)        
+        self.get_logger().info("Sent to Galil PR%s=%d" % (Channel,X))
+
            
     # A keyboard hotkey was pressed 
     def keyboard_callback(self, msg):
@@ -69,9 +92,9 @@ class RobotManual(Node):
             cmd[1] = DELTA_MM
 
         # Send command to stage
-        self.send_movement_in_counts(float(self.cmd[0])*MM_2_COUNT,"A")
+        self.send_movement_in_counts(float(cmd[0])*MM_2_COUNT,"A")
         # WARNING: Galil channel B inverted, that is why the my_goal is negative
-        self.send_movement_in_counts(-float(self.cmd[1])*MM_2_COUNT,"B")
+        self.send_movement_in_counts(-float(cmd[1])*MM_2_COUNT,"B")
 
 def main(args=None):
     rclpy.init(args=args)

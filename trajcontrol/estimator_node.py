@@ -25,7 +25,7 @@ class EstimatorNode(Node):
         #Topics from sensor processing node
         self.subscription_sensor = self.create_subscription(PoseStamped, '/sensor/tip_filtered', self.sensor_callback, 10)
         self.subscription_sensor # prevent unused variable warning
-        self.subscription_robot = self.create_subscription(PoseStamped, '/sensor/base_filtered', self.robot_callback, 10)
+        self.subscription_robot = self.create_subscription(PoseStamped, '/stage/state/needle_pose', self.robot_callback, 10)
         self.subscription_robot # prevent unused variable warning
 
         #Published topics
@@ -36,13 +36,13 @@ class EstimatorNode(Node):
 
         # Initialize Jacobian with estimated values from previous experiments
         # (Alternative: initialize with values from first two sets of sensor and robot data)
-        self.J = np.array([(-0.3482, 0.1089, 0.0893,-0.1670, 0.1967, 0.0913, 0.1103),
-                  ( 0.3594, 0.1332,-0.2593, 0.1975, 0.7322, 0.7989, 0.0794),
-                  (-0.1714, 0.0723, 0.1597, 0.8766, 0.0610,-0.4968, 0.2415),
-                  ( 0.0003, 0.0000,-0.0005, 0.0079, 0.0007,-0.0025, 0.0021),
-                  (-0.0004,-0.0001, 0.0006,-0.0077,-0.0006, 0.0025,-0.0020),
-                  (-0.0017,-0.0006, 0.0009, 0.0040, 0.0083, 0.0053,-0.0007),
-                  (0, 0, 0, 0, 0, 0, 0)])
+        self.J = np.array([(0.9906,-0.1395,-0.5254, 0.0044, 0.0042,-0.0000, 0.0001),
+                          ( 0.0588, 1.7334,-0.1336, 0.0020, 0.0020, 0.0002,-0.0002),
+                          (-0.3769, 0.1906, 0.2970,-0.0016,-0.0015, 0.0004,-0.0004),
+                          ( 0.0000,-0.0003, 0.0017,-0.0000,-0.0000,-0.0000,-0.0000),
+                          ( 0.0004,-0.0005, 0.0015, 0.0000, 0.0000,-0.0000, 0.0000),
+                          ( 0.0058,-0.0028,-0.0015, 0.0000, 0.0000, 0.0000,-0.0000),
+                          (-0.0059, 0.0028, 0.0015,-0.0000,-0.0000, 0.0000, 0.0000)])
 
         self.Z = np.empty(shape=[7,0])                  # Current needle tip pose Z = [x_tip, y_tip, z_tip, q_tip] 
         self.X = np.empty(shape=[7,0])                  # Current needle base pose X = [x_robot, y_needle_depth, z_robot, q_needle_roll]

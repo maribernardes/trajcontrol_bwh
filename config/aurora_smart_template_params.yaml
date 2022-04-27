@@ -4,4 +4,4 @@ estimator_node:
 
 controller_node:
   ros__parameters:
-    K: 0.5
+    K: -0.5

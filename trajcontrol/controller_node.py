@@ -17,14 +17,14 @@ class ControllerNode(Node):
         super().__init__('controller_node')
 
         #Declare node parameters
-        self.declare_parameter('K', 0.50) #Controller gain
+        self.declare_parameter('K', -0.5) #Controller gain
 
         #Topics from sensor processing node
         self.subscription_entry_point = self.create_subscription(PoseStamped, '/subject/state/skin_entry', self.entry_callback, 10)
         self.subscription_entry_point  # prevent unused variable warning
         self.subscription_tip = self.create_subscription(PoseStamped, '/sensor/tip_filtered', self.tip_callback, 10)
         self.subscription_tip  # prevent unused variable warning
-        self.subscription_robot = self.create_subscription(PoseStamped, '/sensor/base_filtered', self.robot_callback, 10)
+        self.subscription_robot = self.create_subscription(PoseStamped, '/stage/state/needle_pose', self.robot_callback, 10)
         self.subscription_robot # prevent unused variable warning
 
         #Topics from estimator node
@@ -73,7 +73,16 @@ class ControllerNode(Node):
 
     # Get current Jacobian matrix from Estimator node
     def jacobian_callback(self, msg):
-        J = np.asarray(CvBridge().imgmsg_to_cv2(msg))
+        # J = np.asarray(CvBridge().imgmsg_to_cv2(msg))
+
+        J = np.array([(0.9906,-0.1395,-0.5254, 0.0044, 0.0042,-0.0000, 0.0001),
+                    ( 0.0588, 1.7334,-0.1336, 0.0020, 0.0020, 0.0002,-0.0002),
+                    (-0.3769, 0.1906, 0.2970,-0.0016,-0.0015, 0.0004,-0.0004),
+                    ( 0.0000,-0.0003, 0.0017,-0.0000,-0.0000,-0.0000,-0.0000),
+                    ( 0.0004,-0.0005, 0.0015, 0.0000, 0.0000,-0.0000, 0.0000),
+                    ( 0.0058,-0.0028,-0.0015, 0.0000, 0.0000, 0.0000,-0.0000),
+                    (-0.0059, 0.0028, 0.0015,-0.0000,-0.0000, 0.0000, 0.0000)])
+
         Jc = np.array([J[:,0],J[:,2]]).T
         
         # Send control signal only if robot is ready and after first readings (entry point and current needle tip)
@@ -82,17 +91,20 @@ class ControllerNode(Node):
                                 self.tip[3,0], self.tip[4,0], self.tip[5,0], self.tip[6,0]]]).T
 
             K = self.get_parameter('K').get_parameter_value().double_value          # Get K value          
-#            self.cmd = self.stage + K*np.matmul(np.linalg.pinv(Jc),self.tip-target) # Calculate control output
+            self.cmd = self.stage + K*np.matmul(np.linalg.pinv(Jc),target-self.tip) # Calculate control output
             my_tip = np.array([[self.tip[0,0], self.tip[2,0]]]).T 
             my_target = np.array([[target[0,0], target[2,0]]]).T 
-            err = my_tip - my_target
-            self.cmd = self.stage + K*(err) # Calculate control output
+            err = target-self.tip
+            # self.cmd = self.stage + K*(err) # Calculate control output
 
             # Limit control output to maximum +-5mm around entry point
             self.cmd[0] = min(self.cmd[0], self.entry_point[0,0]+5)
             self.cmd[1] = min(self.cmd[1], self.entry_point[2,0]+5)
             self.cmd[0] = max(self.cmd[0], self.entry_point[0,0]-5)
             self.cmd[1] = max(self.cmd[1], self.entry_point[2,0]-5)
+
+            # WARNIG JUST TEST!!!
+            self.cmd[1] = self.stage[1,0]
 
             # Send command to stage
             self.send_cmd(float(self.cmd[0]), float(self.cmd[1]))
@@ -102,12 +114,14 @@ class ControllerNode(Node):
             self.get_logger().info('Target: x=%f, y=%f, z=%f' % (target[0,0], target[1,0], target[2,0]))
             self.get_logger().info('Stage: x=%f, z=%f' % (self.stage[0,0], self.stage[1,0]))
             self.get_logger().info('Control: x=%f, z=%f' % (self.cmd[0], self.cmd[1]))
-            self.get_logger().info('Err: x=%f, z=%f'   % (err[0,0], err[1,0]))
+            self.get_logger().info('Err: x=%f, z=%f'   % (err[0,0], err[2,0]))
 
             # Publish control output
             msg = PointStamped()
             msg.point.x = float(self.cmd[0])
             msg.point.z = float(self.cmd[1])
+
+
             msg.header.stamp = self.get_clock().now().to_msg()
 
             self.publisher_control.publish(msg)
