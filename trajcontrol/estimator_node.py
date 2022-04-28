@@ -84,8 +84,8 @@ class EstimatorNode(Node):
 
             # Update Jacobian
             alpha = self.get_parameter('alpha').get_parameter_value().double_value
-            self.J = self.J + alpha*np.matmul(((deltaZ-np.matmul(self.J, deltaX))/(np.matmul(np.transpose(deltaX), deltaX)+1e-9)), np.transpose(deltaX))
-            
+            self.J = self.J + alpha*np.outer((deltaZ-np.matmul(self.J, deltaX))/(np.matmul(np.transpose(deltaX), deltaX)+1e-9), deltaX)
+
             # Publish new Jacobian
             msg = CvBridge().cv2_to_imgmsg(self.J)
             msg.header.stamp = self.get_clock().now().to_msg()
