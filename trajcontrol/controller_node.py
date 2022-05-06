@@ -92,10 +92,10 @@ class ControllerNode(Node):
 
             K = self.get_parameter('K').get_parameter_value().double_value          # Get K value          
             self.cmd = self.stage + K*np.matmul(np.linalg.pinv(Jc),target-self.tip) # Calculate control output
+            # self.cmd = self.stage + K*(err)                                       # Calculate control output
             my_tip = np.array([[self.tip[0,0], self.tip[2,0]]]).T 
             my_target = np.array([[target[0,0], target[2,0]]]).T 
             err = target-self.tip
-            # self.cmd = self.stage + K*(err) # Calculate control output
 
             # Limit control output to maximum +-5mm around entry point
             self.cmd[0] = min(self.cmd[0], self.entry_point[0,0]+5)
@@ -104,7 +104,8 @@ class ControllerNode(Node):
             self.cmd[1] = max(self.cmd[1], self.entry_point[2,0]-5)
 
             # WARNIG JUST TEST!!!
-            self.cmd[1] = self.stage[1,0]
+            self.cmd[0] = 0.0 + self.entry_point[0,0]
+            self.cmd[1] = -10.0 + self.entry_point[2,0]
 
             # Send command to stage
             self.send_cmd(float(self.cmd[0]), float(self.cmd[1]))
