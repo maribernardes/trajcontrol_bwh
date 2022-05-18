@@ -10,6 +10,7 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from stage_control_interfaces.action import MoveStage
 
+SAFE_LIMIT = 5  # Maximum control output delta from entry point
 
 class ControllerNode(Node):
 
@@ -98,14 +99,14 @@ class ControllerNode(Node):
             err = target-self.tip
 
             # Limit control output to maximum +-5mm around entry point
-            self.cmd[0] = min(self.cmd[0], self.entry_point[0,0]+5)
-            self.cmd[1] = min(self.cmd[1], self.entry_point[2,0]+5)
-            self.cmd[0] = max(self.cmd[0], self.entry_point[0,0]-5)
-            self.cmd[1] = max(self.cmd[1], self.entry_point[2,0]-5)
+            self.cmd[0] = min(self.cmd[0], self.entry_point[0,0]+SAFE_LIMIT)
+            self.cmd[1] = min(self.cmd[1], self.entry_point[2,0]+SAFE_LIMIT)
+            self.cmd[0] = max(self.cmd[0], self.entry_point[0,0]-SAFE_LIMIT)
+            self.cmd[1] = max(self.cmd[1], self.entry_point[2,0]-SAFE_LIMIT)
 
             # WARNIG JUST TEST!!!
-            self.cmd[0] = 0.0 + self.entry_point[0,0]
-            self.cmd[1] = -10.0 + self.entry_point[2,0]
+            self.cmd[0] = -15.0 + self.entry_point[0,0]
+            self.cmd[1] = 0.0 + self.entry_point[2,0]
 
             # Send command to stage
             self.send_cmd(float(self.cmd[0]), float(self.cmd[1]))

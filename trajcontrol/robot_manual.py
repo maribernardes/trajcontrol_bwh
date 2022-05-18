@@ -16,7 +16,7 @@ COUNT_2_MM = 1.0/1170.8
 
 DELTA_MM = 3.0  #Increment for manual movement
 
-LIMIT = 5.0
+SAFE_LIMIT = 5.0
 
 class RobotManual(Node):
 
@@ -60,12 +60,12 @@ class RobotManual(Node):
         self.AbsoluteMode = True
 
     def check_limits(self,X,Channel):
-        if X > LIMIT*MM_2_COUNT:
+        if X > SAFE_LIMIT*MM_2_COUNT:
             self.get_logger().info("Limit reach at axis %s" % (Channel))
-            X = LIMIT*MM_2_COUNT
-        elif X < -LIMIT*MM_2_COUNT:
+            X = SAFE_LIMIT*MM_2_COUNT
+        elif X < -SAFE_LIMIT*MM_2_COUNT:
             self.get_logger().info("Limit reach at axis %s" % (Channel))
-            X = -LIMIT*MM_2_COUNT
+            X = -SAFE_LIMIT*MM_2_COUNT
         return X
 
     def send_movement_in_counts(self,X,Channel):

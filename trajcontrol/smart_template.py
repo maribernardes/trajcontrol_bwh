@@ -25,6 +25,7 @@ from datetime import datetime
 
 MM_2_COUNT = 1088.9
 COUNT_2_MM = 1.0/1088.9
+SAFE_LIMIT = 20
 
 class SmartTemplate(Node):
 
@@ -195,12 +196,12 @@ class SmartTemplate(Node):
             return 0
 
     def check_limits(self,X,Channel):
-        if X > 5*MM_2_COUNT:
+        if X > SAFE_LIMIT*MM_2_COUNT:
             self.get_logger().info("Limit reach at axis %s" % (Channel))
-            X = 5*MM_2_COUNT
-        elif X < -5*MM_2_COUNT:
+            X = SAFE_LIMIT*MM_2_COUNT
+        elif X < -SAFE_LIMIT*MM_2_COUNT:
             self.get_logger().info("Limit reach at axis %s" % (Channel))
-            X = -5*MM_2_COUNT
+            X = -SAFE_LIMIT*MM_2_COUNT
         return X
 
     def send_movement_in_counts(self,X,Channel):
