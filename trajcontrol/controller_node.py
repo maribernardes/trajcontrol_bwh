@@ -104,8 +104,8 @@ class ControllerNode(Node):
             self.cmd[1] = max(self.cmd[1], self.entry_point[2,0]-5)
 
             # WARNIG JUST TEST!!!
-            self.cmd[0] = 10.0 + self.entry_point[0,0]
-            self.cmd[1] = 0.0 + self.entry_point[2,0]
+            self.cmd[0] = 0.0 + self.entry_point[0,0]
+            self.cmd[1] = -10.0 + self.entry_point[2,0]
 
             # Send command to stage
             self.send_cmd(float(self.cmd[0]), float(self.cmd[1]))
