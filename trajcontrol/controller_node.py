@@ -11,6 +11,7 @@ from sensor_msgs.msg import Image
 from stage_control_interfaces.action import MoveStage
 
 SAFE_LIMIT = 5.0  # Maximum control output delta from entry point
+CONTROL_LENGTH = 50.0
 
 class ControllerNode(Node):
 
@@ -47,7 +48,7 @@ class ControllerNode(Node):
         self.tip = np.empty(shape=[7,0])            # Current needle tip pose
         self.target = np.empty(shape=[7,0])         # Current target pose
         self.stage = np.empty(shape=[2,0])          # Current stage pose
-        self.cmd = np.zeros((2,1))                  # Control output to the robot stage
+        self.cmd = np.empty((2,1))                  # Control output to the robot stage
         self.robot_ready = True                     # Robot free to new command
         self.J = np.array([(0.9906,-0.1395,-0.5254, 0.0044, 0.0042,-0.0000, 0.0001),
                           ( 0.0588, 1.7334,-0.1336, 0.0020, 0.0020, 0.0002,-0.0002),
@@ -56,36 +57,39 @@ class ControllerNode(Node):
                           ( 0.0004,-0.0005, 0.0015, 0.0000, 0.0000,-0.0000, 0.0000),
                           ( 0.0058,-0.0028,-0.0015, 0.0000, 0.0000, 0.0000,-0.0000),
                           (-0.0059, 0.0028, 0.0015,-0.0000,-0.0000, 0.0000, 0.0000)])
+        self.entry_depth = 0.0
+        self.depth = 0.0
 
     # Get current base pose
     def robot_callback(self, msg_robot):
-        # Save base pose only after getting entry point
-        if (self.entry_point.size != 0):
-            # Get pose from PoseStamped
-            robot = msg_robot.pose
-            # Get robot position
-            self.stage = np.array([[robot.position.x, robot.position.z]]).T
-            # Check if robot reached its goal position
+        # Get pose from PoseStamped
+        robot = msg_robot.pose
+        # Get robot position
+        self.stage = np.array([[robot.position.x, robot.position.z]]).T
+        self.depth = robot.position.y
+
+        # Check if robot reached its goal position (only after started control action)
+        if (self.cmd.size != 0):
             if (np.linalg.norm(self.stage - self.cmd) <= 0.4):
                 self.robot_ready = True 
-                self.get_logger().info('Reached control target')
-    
-    # Get current entry point
-    def entry_callback(self, msg):
-        entry_point = msg.pose
-        self.entry_point = np.array([[entry_point.position.x, entry_point.position.y, entry_point.position.z, \
-                                entry_point.orientation.w, entry_point.orientation.x, entry_point.orientation.y, entry_point.orientation.z]]).T
 
     # Get current tip pose
     def tip_callback(self, msg):
         tip = msg.pose
         self.tip = np.array([[tip.position.x, tip.position.y, tip.position.z, \
-                                tip.orientation.w, tip.orientation.x, tip.orientation.y, tip.orientation.z]]).T
+                                tip.orientation.w, tip.orientation.x, tip.orientation.y, tip.orientation.z]]).T    
+    # Get current entry point
+    def entry_callback(self, msg):
+        # Only once
+        if (self.entry_point.size == 0):
+            entry_point = msg.pose
+            self.entry_point = np.array([[entry_point.position.x, entry_point.position.y, entry_point.position.z, \
+                                    entry_point.orientation.w, entry_point.orientation.x, entry_point.orientation.y, entry_point.orientation.z]]).T
+            self.entry_depth = entry_point.position.y
 
     # Get current Jacobian matrix from Estimator node
     def jacobian_callback(self, msg):
         # self.J = np.asarray(CvBridge().imgmsg_to_cv2(msg))
-
         self.J = np.array([(0.9906,-0.1395,-0.5254, 0.0044, 0.0042,-0.0000, 0.0001),
                     ( 0.0588, 1.7334,-0.1336, 0.0020, 0.0020, 0.0002,-0.0002),
                     (-0.3769, 0.1906, 0.2970,-0.0016,-0.0015, 0.0004,-0.0004),
@@ -97,7 +101,7 @@ class ControllerNode(Node):
     # Timer to robot control
     def timer_control_robot(self):
         Jc = np.array([self.J[:,0], self.J[:,2]]).T
-        
+
         # Send control signal only if robot is ready and after first readings (entry point and current needle tip)
         if (self.robot_ready == True) and (self.entry_point.size != 0) and (self.tip.size != 0)  and (self.stage.size != 0):
             target = np.array([[self.entry_point[0,0], self.tip[1,0], self.entry_point[2,0], \
@@ -120,8 +124,10 @@ class ControllerNode(Node):
             self.cmd[1,0] = 0.0 + self.entry_point[2,0]
 
             # Send command to stage
-            self.send_cmd(float(self.cmd[0]), float(self.cmd[1]))
-            self.robot_ready = False
+            # Check if max depth reached
+            if (self.depth < (self.entry_depth+CONTROL_LENGTH)):
+                self.send_cmd(float(self.cmd[0,0]), float(self.cmd[1,0]))
+                self.robot_ready = False
 
             self.get_logger().info('Tip: x=%f, y= %f, z=%f'   % (self.tip[0,0], self.tip[1,0], self.tip[2,0]))
             self.get_logger().info('Target: x=%f, y=%f, z=%f' % (target[0,0], target[1,0], target[2,0]))

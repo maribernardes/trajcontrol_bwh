@@ -14,6 +14,7 @@ from cv_bridge.core import CvBridge
 from numpy import linalg
 from ros2_igtl_bridge.msg import Transform
 
+
 class EstimatorNode(Node):
 
     def __init__(self):
@@ -50,6 +51,7 @@ class EstimatorNode(Node):
         self.Zant = np.empty(shape=[7,0])               # Previous Z = [x_tip, y_tip, z_tip, q_tip] 
         self.TXant = self.get_clock().now().to_msg()    # Previous X instant (time)
         self.TZant = self.get_clock().now().to_msg()    # Previous Z instant (time)
+
         
     # Get current needle tip from sensor processing node
     # Z = [x_tip, y_tip, z_tip, q_tip] (Obs: for q, roll=pitch)
