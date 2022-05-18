@@ -25,7 +25,7 @@ from datetime import datetime
 
 MM_2_COUNT = 1088.9
 COUNT_2_MM = 1.0/1088.9
-SAFE_LIMIT = 20
+SAFE_LIMIT = 10.0
 
 class SmartTemplate(Node):
 

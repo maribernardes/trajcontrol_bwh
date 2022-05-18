@@ -10,6 +10,7 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from stage_control_interfaces.action import MoveStage
 
+FINAL_LENGTH = 80.0
 
 class RobotRand(Node):
 
@@ -26,6 +27,9 @@ class RobotRand(Node):
 
         #Published topics
         self.publisher_control = self.create_publisher(PointStamped, '/stage/control/cmd', 10)
+
+        timer_period = 0.5  # seconds
+        self.timer = self.create_timer(timer_period, self.timer_move_robot)
 
         #Action client 
         #Check the correct action name and msg type from John's code
@@ -57,7 +61,7 @@ class RobotRand(Node):
             self.stage = np.array([[robot.position.x, robot.position.z]]).T
             self.depth = robot.position.y
             # Check if max depth reached
-            if (self.depth >= (self.entry_depth+90)):
+            if (self.depth >= (self.entry_depth+FINAL_LENGTH)):
                 self.get_logger().info('Depth: y=%f' % (self.depth))
                 self.robot_ready = False
             # Check if robot reached its goal position
@@ -65,12 +69,14 @@ class RobotRand(Node):
                 self.robot_ready = True 
                 self.get_logger().info('Reached control target')
 
+    # Move robot to new random position
+    def timer_move_robot(self):
         # Send control signal only if robot is ready and after getting entry point (SPACE was hit by user)
         if (self.robot_ready == True) and (self.entry_point.size != 0):
 
-            new_rand = np.random.uniform(-2.5, 2.5, (2,1))
-            # new_rand[1] = min(new_rand[1], 1.0)
-            # new_rand[1] = max(new_rand[1],-1.0)
+            new_rand = np.random.uniform(-2, 2, (2,1))
+            new_rand[1] = min(new_rand[1], 1.0)
+            new_rand[1] = max(new_rand[1],-1.0)
 
             self.cmd = self.entry_point + new_rand
 
@@ -78,7 +84,6 @@ class RobotRand(Node):
             self.send_cmd(float(self.cmd[0]), float(self.cmd[1]))
             self.robot_ready = False
 
-            self.get_logger().info('Stage: x=%f, z=%f' % (self.stage[0,0], self.stage[1,0]))
             self.get_logger().info('Control: x=%f, z=%f' % (self.cmd[0], self.cmd[1]))
 
             # Publish control output
@@ -122,8 +127,8 @@ class RobotRand(Node):
         result = future.result().result
         status = future.result().status
         # if status == GoalStatus.STATUS_SUCCEEDED:
-            # self.get_logger().info('Goal succeeded! Result: {0}'.format(result.x))
-            # self.robot_ready = True
+        #     self.get_logger().info('Goal succeeded! Result: {0}'.format(result.x))
+        #     self.robot_ready = True
 
 def main(args=None):
     rclpy.init(args=args)

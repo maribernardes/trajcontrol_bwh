@@ -10,7 +10,7 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from stage_control_interfaces.action import MoveStage
 
-SAFE_LIMIT = 5  # Maximum control output delta from entry point
+SAFE_LIMIT = 5.0  # Maximum control output delta from entry point
 
 class ControllerNode(Node):
 
@@ -32,6 +32,9 @@ class ControllerNode(Node):
         self.subscription_estimator = self.create_subscription(Image, '/needle/state/jacobian', self.jacobian_callback, 10)
         self.subscription_estimator  # prevent unused variable warning
 
+        timer_period = 0.5  # seconds
+        self.timer = self.create_timer(timer_period, self.timer_control_robot)
+
         #Published topics
         self.publisher_control = self.create_publisher(PointStamped, '/stage/control/cmd', 10)
 
@@ -46,6 +49,13 @@ class ControllerNode(Node):
         self.stage = np.empty(shape=[2,0])          # Current stage pose
         self.cmd = np.zeros((2,1))                  # Control output to the robot stage
         self.robot_ready = True                     # Robot free to new command
+        self.J = np.array([(0.9906,-0.1395,-0.5254, 0.0044, 0.0042,-0.0000, 0.0001),
+                          ( 0.0588, 1.7334,-0.1336, 0.0020, 0.0020, 0.0002,-0.0002),
+                          (-0.3769, 0.1906, 0.2970,-0.0016,-0.0015, 0.0004,-0.0004),
+                          ( 0.0000,-0.0003, 0.0017,-0.0000,-0.0000,-0.0000,-0.0000),
+                          ( 0.0004,-0.0005, 0.0015, 0.0000, 0.0000,-0.0000, 0.0000),
+                          ( 0.0058,-0.0028,-0.0015, 0.0000, 0.0000, 0.0000,-0.0000),
+                          (-0.0059, 0.0028, 0.0015,-0.0000,-0.0000, 0.0000, 0.0000)])
 
     # Get current base pose
     def robot_callback(self, msg_robot):
@@ -74,9 +84,9 @@ class ControllerNode(Node):
 
     # Get current Jacobian matrix from Estimator node
     def jacobian_callback(self, msg):
-        # J = np.asarray(CvBridge().imgmsg_to_cv2(msg))
+        # self.J = np.asarray(CvBridge().imgmsg_to_cv2(msg))
 
-        J = np.array([(0.9906,-0.1395,-0.5254, 0.0044, 0.0042,-0.0000, 0.0001),
+        self.J = np.array([(0.9906,-0.1395,-0.5254, 0.0044, 0.0042,-0.0000, 0.0001),
                     ( 0.0588, 1.7334,-0.1336, 0.0020, 0.0020, 0.0002,-0.0002),
                     (-0.3769, 0.1906, 0.2970,-0.0016,-0.0015, 0.0004,-0.0004),
                     ( 0.0000,-0.0003, 0.0017,-0.0000,-0.0000,-0.0000,-0.0000),
@@ -84,13 +94,14 @@ class ControllerNode(Node):
                     ( 0.0058,-0.0028,-0.0015, 0.0000, 0.0000, 0.0000,-0.0000),
                     (-0.0059, 0.0028, 0.0015,-0.0000,-0.0000, 0.0000, 0.0000)])
 
-        Jc = np.array([J[:,0],J[:,2]]).T
+    # Timer to robot control
+    def timer_control_robot(self):
+        Jc = np.array([self.J[:,0], self.J[:,2]]).T
         
         # Send control signal only if robot is ready and after first readings (entry point and current needle tip)
-        if (self.robot_ready == True) and (self.entry_point.size != 0) and (self.tip.size != 0):
+        if (self.robot_ready == True) and (self.entry_point.size != 0) and (self.tip.size != 0)  and (self.stage.size != 0):
             target = np.array([[self.entry_point[0,0], self.tip[1,0], self.entry_point[2,0], \
                                 self.tip[3,0], self.tip[4,0], self.tip[5,0], self.tip[6,0]]]).T
-
             K = self.get_parameter('K').get_parameter_value().double_value          # Get K value          
             self.cmd = self.stage + K*np.matmul(np.linalg.pinv(Jc),target-self.tip) # Calculate control output
             # self.cmd = self.stage + K*(err)                                       # Calculate control output
@@ -99,14 +110,14 @@ class ControllerNode(Node):
             err = target-self.tip
 
             # Limit control output to maximum +-5mm around entry point
-            self.cmd[0] = min(self.cmd[0], self.entry_point[0,0]+SAFE_LIMIT)
-            self.cmd[1] = min(self.cmd[1], self.entry_point[2,0]+SAFE_LIMIT)
-            self.cmd[0] = max(self.cmd[0], self.entry_point[0,0]-SAFE_LIMIT)
-            self.cmd[1] = max(self.cmd[1], self.entry_point[2,0]-SAFE_LIMIT)
+            self.cmd[0,0] = min(self.cmd[0,0], self.entry_point[0,0]+SAFE_LIMIT)
+            self.cmd[1,0] = min(self.cmd[1,0], self.entry_point[2,0]+SAFE_LIMIT)
+            self.cmd[0,0] = max(self.cmd[0,0], self.entry_point[0,0]-SAFE_LIMIT)
+            self.cmd[1,0] = max(self.cmd[1,0], self.entry_point[2,0]-SAFE_LIMIT)
 
-            # WARNIG JUST TEST!!!
-            self.cmd[0] = -15.0 + self.entry_point[0,0]
-            self.cmd[1] = 0.0 + self.entry_point[2,0]
+            # # WARNING JUST TEST!!!
+            # self.cmd[0,0] = 0.0 + self.entry_point[0,0]
+            self.cmd[1,0] = 0.0 + self.entry_point[2,0]
 
             # Send command to stage
             self.send_cmd(float(self.cmd[0]), float(self.cmd[1]))
@@ -115,7 +126,7 @@ class ControllerNode(Node):
             self.get_logger().info('Tip: x=%f, y= %f, z=%f'   % (self.tip[0,0], self.tip[1,0], self.tip[2,0]))
             self.get_logger().info('Target: x=%f, y=%f, z=%f' % (target[0,0], target[1,0], target[2,0]))
             self.get_logger().info('Stage: x=%f, z=%f' % (self.stage[0,0], self.stage[1,0]))
-            self.get_logger().info('Control: x=%f, z=%f' % (self.cmd[0], self.cmd[1]))
+            self.get_logger().info('Control: x=%f, z=%f' % (self.cmd[0,0], self.cmd[1,0]))
             self.get_logger().info('Err: x=%f, z=%f'   % (err[0,0], err[2,0]))
 
             # Publish control output

@@ -14,7 +14,7 @@ from stage_control_interfaces.action import MoveStage
 MM_2_COUNT = 1170.8 #1088.9
 COUNT_2_MM = 1.0/1170.8
 
-DELTA_MM = 3.0  #Increment for manual movement
+DELTA_MM = 0.5  #Increment for manual movement
 
 SAFE_LIMIT = 5.0
 
@@ -78,7 +78,6 @@ class RobotManual(Node):
         time.sleep(0.1)        
         self.get_logger().info("Sent to Galil PR%s=%d" % (Channel,X))
 
-           
     # A keyboard hotkey was pressed 
     def keyboard_callback(self, msg):
         cmd = np.zeros((2,1))
