@@ -34,14 +34,13 @@ def generate_launch_description():
 
     estimator = Node(
         package="trajcontrol",
-        executable="estimator_node",
+        executable="estimator",
         parameters=[config]
     )
 
     controller = Node(
         package="trajcontrol",
-        executable="robot_cmd"
-        # executable="controller_node"
+        executable="controller_discrete"
     )   
 
     file = Node(

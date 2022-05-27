@@ -39,14 +39,14 @@ def generate_launch_description():
 
     estimator = Node(
         package="trajcontrol",
-        executable="estimator_node",
+        executable="estimator",
         parameters=[config]
     )
 
     controller = Node(
         package="trajcontrol",
-        # executable="mpc_controller"
-        executable="controller_node"
+        # executable="controller_mpc"
+        executable="controller_discrete"
     )   
 
     save_file = Node(

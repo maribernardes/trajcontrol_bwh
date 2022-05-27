@@ -12,10 +12,10 @@ from stage_control_interfaces.action import MoveStage
 
 FINAL_LENGTH = 80.0
 
-class RobotRand(Node):
+class ControllerRand(Node):
 
     def __init__(self):
-        super().__init__('robot_rand')
+        super().__init__('controller_rand')
 
         #Topics from sensor processing node
         self.subscription_entry_point = self.create_subscription(PoseStamped, '/subject/state/skin_entry', self.entry_callback, 10)
@@ -39,7 +39,7 @@ class RobotRand(Node):
         self.entry_point = np.empty(shape=[2,0])    # Initial needle tip pose
         self.stage = np.empty(shape=[2,0])          # Current stage pose
         self.cmd = np.zeros((2,1))                  # Control output to the robot stage
-        self.robot_ready = True                     # Robot free to new command
+        self.robot_idle = True                     # Robot free to new command
         self.entry_depth = 0.0
         self.depth = 0.0
    
@@ -63,16 +63,16 @@ class RobotRand(Node):
             # Check if max depth reached
             if (self.depth >= (self.entry_depth+FINAL_LENGTH)):
                 self.get_logger().info('Depth: y=%f' % (self.depth))
-                self.robot_ready = False
+                self.robot_idle = False
             # Check if robot reached its goal position
             elif (np.linalg.norm(self.stage - self.cmd) <= 0.25):
-                self.robot_ready = True 
+                self.robot_idle = True 
                 self.get_logger().info('Reached control target')
 
     # Move robot to new random position
     def timer_move_robot(self):
         # Send control signal only if robot is ready and after getting entry point (SPACE was hit by user)
-        if (self.robot_ready == True) and (self.entry_point.size != 0):
+        if (self.robot_idle == True) and (self.entry_point.size != 0):
 
             new_rand = np.random.uniform(-2, 2, (2,1))
             new_rand[1] = min(new_rand[1], 1.0)
@@ -82,7 +82,7 @@ class RobotRand(Node):
 
             # Send command to stage
             self.send_cmd(float(self.cmd[0]), float(self.cmd[1]))
-            self.robot_ready = False
+            self.robot_idle = False
 
             self.get_logger().info('Control: x=%f, z=%f' % (self.cmd[0], self.cmd[1]))
 
@@ -128,19 +128,19 @@ class RobotRand(Node):
         status = future.result().status
         # if status == GoalStatus.STATUS_SUCCEEDED:
         #     self.get_logger().info('Goal succeeded! Result: {0}'.format(result.x))
-        #     self.robot_ready = True
+        #     self.robot_idle = True
 
 def main(args=None):
     rclpy.init(args=args)
 
-    robot_rand = RobotRand()
+    controller_rand = ControllerRand()
 
-    rclpy.spin(robot_rand)
+    rclpy.spin(controller_rand)
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
     # when the garbage collector destroys the node object)
-    robot_rand.destroy_node()
+    controller_rand.destroy_node()
     rclpy.shutdown()
 
 if __name__ == '__main__':

@@ -13,10 +13,10 @@ from stage_control_interfaces.action import MoveStage
 from scipy.optimize import minimize
 
 
-class MPCController(Node):
+class ControllerMPC(Node):
 
     def __init__(self):
-        super().__init__('mpc_controller')
+        super().__init__('controller_mpc')
 
         #Declare node parameters
         self.declare_parameter('P', 10) #Prediction Horizon
@@ -52,7 +52,7 @@ class MPCController(Node):
 
         self.entry_point = np.empty(shape=[7,0])    # Initial needle tip pose
         self.cmd = np.zeros((2,1))                  # Control output to the robot stage
-        self.robot_ready = True                     # Robot free to new command
+        self.robot_idle = True                      # Robot free to new command
 
 
     # Get current base pose
@@ -84,7 +84,7 @@ class MPCController(Node):
         self.J = np.array([J[:,0],J[:,2]]).T
        
         # Send control signal only if robot is ready and after first readings (entry point and current needle tip)
-        if (self.robot_ready == True) and (self.entry_point.size != 0) and (self.tip.size != 0):
+        if (self.robot_idle == True) and (self.entry_point.size != 0) and (self.tip.size != 0):
             target = np.array([[self.entry_point[0,0], self.tip[1,0], self.entry_point[2,0], \
                                 self.tip[3,0], self.tip[4,0], self.tip[5,0], self.tip[6,0]]]).T
 
@@ -152,7 +152,7 @@ class MPCController(Node):
             # Send command to stage
             # Subtract the entry point because robot considers initial position to be (0,0)
             self.send_cmd(float(self.cmd[0,0])-self.entry_point[0,0], float(self.cmd[1,0])-self.entry_point[2,0])
-            self.robot_ready = False
+            self.robot_idle = False
 
             self.get_logger().info('Control: x=%f, z=%f - Tip: x=%f, y= %f, z=%f - Target: x=%f, y=%f, z=%f' % (self.cmd[0,0], self.cmd[1,0], \
             self.tip[0,0], self.tip[1,0], self.tip[2,0], target[0,0], target[1,0], target[2,0]))    
@@ -199,24 +199,24 @@ class MPCController(Node):
         status = future.result().status
         if status == GoalStatus.STATUS_SUCCEEDED:
             self.get_logger().info('Goal succeeded! Result: {0}'.format(result.x))
-            self.robot_ready = True
+            self.robot_idle = True
 
 def main(args=None):
     rclpy.init(args=args)
 
-    mpc_controller = MPCController()
+    controller_mpc = ControllerMPC()
 
     global P
     global C
-    P = mpc_controller.get_parameter('P').get_parameter_value().integer_value
-    C = mpc_controller.get_parameter('C').get_parameter_value().integer_value
+    P = controller_mpc.get_parameter('P').get_parameter_value().integer_value
+    C = controller_mpc.get_parameter('C').get_parameter_value().integer_value
 
-    rclpy.spin(mpc_controller)
+    rclpy.spin(controller_mpc)
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
     # when the garbage collector destroys the node object)
-    mpc_controller.destroy_node()
+    controller_mpc.destroy_node()
     rclpy.shutdown()
 
 if __name__ == '__main__':

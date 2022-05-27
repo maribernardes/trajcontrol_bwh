@@ -15,10 +15,10 @@ from numpy import linalg
 from ros2_igtl_bridge.msg import Transform
 
 
-class EstimatorNode(Node):
+class Estimator(Node):
 
     def __init__(self):
-        super().__init__('estimator_node')
+        super().__init__('estimator')
 
         #Declare node parameters
         self.declare_parameter('alpha', 0.65) #Jacobian update parameter
@@ -115,14 +115,14 @@ class EstimatorNode(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    estimator_node = EstimatorNode()
+    estimator = Estimator()
 
-    rclpy.spin(estimator_node)
+    rclpy.spin(estimator)
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
     # when the garbage collector destroys the node object)
-    estimator_node.destroy_node()
+    estimator.destroy_node()
     rclpy.shutdown()
 
 
