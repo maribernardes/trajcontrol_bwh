@@ -18,10 +18,10 @@ DELTA_MM = 0.5  #Increment for manual movement
 
 SAFE_LIMIT = 5.0
 
-class RobotManual(Node):
+class SmartTemplateManual(Node):
 
     def __init__(self):
-        super().__init__('robot_manual')
+        super().__init__('smart_template_manual')
 
         #Topic from keypress node
         self.subscription_keyboard = self.create_subscription(Int8, '/keyboard/key', self.keyboard_callback, 10)
@@ -97,13 +97,13 @@ class RobotManual(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    robot_manual = RobotManual()
-    rclpy.spin(robot_manual)
+    smart_template_manual = SmartTemplateManual()
+    rclpy.spin(smart_template_manual)
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
     # when the garbage collector destroys the node object)
-    robot_manual.destroy_node()
+    smart_template_manual.destroy_node()
     rclpy.shutdown()
 
 if __name__ == '__main__':

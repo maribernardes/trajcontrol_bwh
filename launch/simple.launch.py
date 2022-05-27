@@ -39,15 +39,15 @@ def generate_launch_description():
 
     estimator = Node(
         package="trajcontrol",
-        executable="estimator_node",
+        executable="estimator",
         parameters=[config]
     )
 
     controller = Node(
         package="trajcontrol",
-        executable="controller_node",
-        # executable="mpc_controller",
-        # executable="robot_rand",
+        executable="controller_discrete",
+        # executable="controller_mpc",
+        # executable="controller_rand",
         parameters=[config]
     )   
 

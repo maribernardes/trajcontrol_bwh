@@ -5,18 +5,18 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 from action_msgs.msg import GoalStatus
 
-from geometry_msgs.msg import PoseStamped, PointStamped
+from geometry_msgs.msg import PoseStamped, PointStamped, Point
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from stage_control_interfaces.action import MoveStage
 
-SAFE_LIMIT = 5.0  # Maximum control output delta from entry point
-CONTROL_LENGTH = 50.0
+SAFE_LIMIT = 5.0            # Maximum control output delta from entry point
+CONTROL_LENGTH = 50.0       # Maximum insertion depth for control input (stops robot after that point)
 
-class ControllerNode(Node):
+class Controller(Node):
 
     def __init__(self):
-        super().__init__('controller_node')
+        super().__init__('controller')
 
         #Declare node parameters
         self.declare_parameter('K', -0.5) #Controller gain
@@ -49,7 +49,7 @@ class ControllerNode(Node):
         self.target = np.empty(shape=[7,0])         # Current target pose
         self.stage = np.empty(shape=[2,0])          # Current stage pose
         self.cmd = np.empty((2,1))                  # Control output to the robot stage
-        self.robot_ready = True                     # Robot free to new command
+        self.robot_idle = True                     # Robot free to new command
         self.J = np.array([(0.9906,-0.1395,-0.5254, 0.0044, 0.0042,-0.0000, 0.0001),
                           ( 0.0588, 1.7334,-0.1336, 0.0020, 0.0020, 0.0002,-0.0002),
                           (-0.3769, 0.1906, 0.2970,-0.0016,-0.0015, 0.0004,-0.0004),
@@ -71,7 +71,7 @@ class ControllerNode(Node):
         # Check if robot reached its goal position (only after started control action)
         if (self.cmd.size != 0):
             if (np.linalg.norm(self.stage - self.cmd) <= 0.4):
-                self.robot_ready = True 
+                self.robot_idle = True 
 
     # Get current tip pose
     def tip_callback(self, msg):
@@ -103,7 +103,7 @@ class ControllerNode(Node):
         Jc = np.array([self.J[:,0], self.J[:,2]]).T
 
         # Send control signal only if robot is ready and after first readings (entry point and current needle tip)
-        if (self.robot_ready == True) and (self.entry_point.size != 0) and (self.tip.size != 0)  and (self.stage.size != 0):
+        if (self.robot_idle == True) and (self.entry_point.size != 0) and (self.tip.size != 0)  and (self.stage.size != 0):
             target = np.array([[self.entry_point[0,0], self.tip[1,0], self.entry_point[2,0], \
                                 self.tip[3,0], self.tip[4,0], self.tip[5,0], self.tip[6,0]]]).T
             K = self.get_parameter('K').get_parameter_value().double_value          # Get K value          
@@ -127,7 +127,7 @@ class ControllerNode(Node):
             # Check if max depth reached
             if (self.depth < (self.entry_depth+CONTROL_LENGTH)):
                 self.send_cmd(float(self.cmd[0,0]), float(self.cmd[1,0]))
-                self.robot_ready = False
+                self.robot_idle = False
 
             self.get_logger().info('Tip: x=%f, y= %f, z=%f'   % (self.tip[0,0], self.tip[1,0], self.tip[2,0]))
             self.get_logger().info('Target: x=%f, y=%f, z=%f' % (target[0,0], target[1,0], target[2,0]))
@@ -137,12 +137,8 @@ class ControllerNode(Node):
 
             # Publish control output
             msg = PointStamped()
-            msg.point.x = float(self.cmd[0])
-            msg.point.z = float(self.cmd[1])
-
-
+            msg.point = Point(x=float(self.cmd[0]), z=float(self.cmd[1]))
             msg.header.stamp = self.get_clock().now().to_msg()
-
             self.publisher_control.publish(msg)
 
     # Send MoveStage action to Stage node (Goal)
@@ -179,19 +175,19 @@ class ControllerNode(Node):
         status = future.result().status
         # if status == GoalStatus.STATUS_SUCCEEDED:
             # self.get_logger().info('Goal succeeded! Result: {0}'.format(result.x))
-            # self.robot_ready = True
+            # self.robot_idle = True
 
 def main(args=None):
     rclpy.init(args=args)
 
-    controller_node = ControllerNode()
+    controller = Controller()
 
-    rclpy.spin(controller_node)
+    rclpy.spin(controller)
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
     # when the garbage collector destroys the node object)
-    controller_node.destroy_node()
+    controller.destroy_node()
     rclpy.shutdown()
 
 if __name__ == '__main__':
