@@ -33,10 +33,12 @@ class SensorProcessing(Node):
         self.listen_keyboard = False
 
         #Published topics
-        timer_period = 0.5  # seconds
-        self.timer = self.create_timer(timer_period, self.timer_entry_point_callback)
-        
+        timer_period_entry = 0.5  # seconds
+        self.timer = self.create_timer(timer_period_entry, self.timer_entry_point_callback)        
         self.publisher_entry_point = self.create_publisher(PoseStamped, '/subject/state/skin_entry', 10)
+
+        timer_period = 0.2
+        self.timer = self.create_timer(timer_period_entry, self.timer_aurora_filtered_callback)
         self.publisher_tipfiltered = self.create_publisher(PoseStamped, '/sensor/tip_filtered', 10)
         self.publisher_basefiltered = self.create_publisher(PoseStamped,'/sensor/base_filtered', 10)
 
@@ -69,6 +71,27 @@ class SensorProcessing(Node):
             msg.pose.orientation = Quaternion(w=self.entry_point[3], x=self.entry_point[4], y=self.entry_point[5], z=self.entry_point[6])
             self.publisher_entry_point.publish(msg)
 
+    # Publishes aurora readings filtered and transformed to robot frame
+    def timer_aurora_filtered_callback (self):
+        # Publish last needle filtered pose in robot frame
+        if (self.Z.size != 0):
+            msg = PoseStamped()
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.header.frame_id = 'stage'
+            msg.pose.position = Point(x=self.Z[0], y=self.Z[1], z=self.Z[2])
+            msg.pose.orientation = Quaternion(w=self.Z[3], x=self.Z[4], y=self.Z[5], z=self.Z[6])
+            self.publisher_tipfiltered.publish(msg)
+
+        # Publish last base filtered pose in robot frame
+        if (self.X.size != 0):
+            msg = PoseStamped()
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.header.frame_id = 'stage'
+            msg.pose.position = Point(x=self.X[0], y=self.X[1], z=self.X[2]-DIST_NEEDLE_BASE)
+            msg.pose.orientation = Quaternion(w=self.X[3], x=self.X[4], y=self.X[5], z=self.X[6])
+            self.publisher_basefiltered.publish(msg)
+
+
     # Get current Aurora sensor measurements and publishes to '/needle/state/pose_filtered'
     def aurora_callback(self, msg_sensor):
         # Get needle shape from Aurora IGTL
@@ -92,13 +115,6 @@ class SensorProcessing(Node):
                 # Transform from sensor to robot frame
                 self.Z = pose_transform(Z_sensor, self.registration)
                 
-                # Publish last needle filtered pose in robot frame
-                msg = PoseStamped()
-                msg.header.stamp = self.get_clock().now().to_msg()
-                msg.header.frame_id = 'stage'
-                msg.pose.position = Point(x=self.Z[0], y=self.Z[1], z=self.Z[2])
-                msg.pose.orientation = Quaternion(w=self.Z[3], x=self.Z[4], y=self.Z[5], z=self.Z[6])
-                self.publisher_tipfiltered.publish(msg)
     
         if name=="BaseToTracker": # Name is adjusted in Plus .xml
             # Get aurora new reading
@@ -119,15 +135,6 @@ class SensorProcessing(Node):
                 # Transform from sensor to robot frame
                 self.X = pose_transform(X_sensor, self.registration)
 
-                # Publish only after entry point is defined
-                if (self.entry_point.size != 0): 
-                    # Publish last needle filtered pose in robot frame
-                    msg = PoseStamped()
-                    msg.header.stamp = self.get_clock().now().to_msg()
-                    msg.header.frame_id = 'stage'
-                    msg.pose.position = Point(x=self.X[0], y=self.X[1], z=self.X[2]-DIST_NEEDLE_BASE)
-                    msg.pose.orientation = Quaternion(w=self.X[3], x=self.X[4], y=self.X[5], z=self.X[6])
-                    self.publisher_basefiltered.publish(msg)
 
     # A keyboard hotkey was pressed 
     def keyboard_callback(self, msg):

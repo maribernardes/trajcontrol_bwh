@@ -50,10 +50,10 @@ class ControllerDiscrete(Node):
         self.tip = np.empty(shape=[7,0])            # Current needle tip pose
         self.target = np.empty(shape=[7,0])         # Current target pose
         self.stage = np.empty(shape=[2,0])          # Current stage pose
-        self.cmd = np.empty((2,1))                  # Control output to the robot stage
-        self.robot_idle = True                      # Robot free to new command
+        self.cmd = np.empty(shape=[2,1])                  # Control output to the robot stage
+        self.robot_idle = False                      # Robot free to new command
         self.depth = 0.0                            # Current insertion depth
-        self.J = np.zeros(7,7)                      # Initial Jacobian
+        self.J = np.zeros(shape=[7,7])                      # Initial Jacobian
 
     # A keyboard hotkey was pressed
     def keyboard_callback(self, msg):
@@ -78,14 +78,17 @@ class ControllerDiscrete(Node):
                 self.cmd = self.stage + K*np.matmul(np.linalg.pinv(Jc),err)     # Calculate control output
 
                 # Limit control output to SAFE_LIMIT around entry point
+                if abs(self.cmd[1,0]-self.entry_point[2,0]) > SAFE_LIMIT:
+                    self.get_logger().info('Reached SAFE_LIMIT for control in Z')
+
                 self.cmd[0,0] = min(self.cmd[0,0], self.entry_point[0,0]+SAFE_LIMIT)
                 self.cmd[1,0] = min(self.cmd[1,0], self.entry_point[2,0]+SAFE_LIMIT)
                 self.cmd[0,0] = max(self.cmd[0,0], self.entry_point[0,0]-SAFE_LIMIT)
                 self.cmd[1,0] = max(self.cmd[1,0], self.entry_point[2,0]-SAFE_LIMIT)
 
                 # # WARNING JUST FOR TEST!!! - DELETE AFTER
-                # self.cmd[0,0] = 0.0 + self.entry_point[0,0]
-                # self.cmd[1,0] = 0.0 + self.entry_point[2,0]
+                self.cmd[0,0] = 0.0 + self.entry_point[0,0]
+                #self.cmd[1,0] = 0.0 + self.entry_point[2,0]
 
                 # Send command to stage
                 self.send_cmd(float(self.cmd[0,0]), float(self.cmd[1,0]))
@@ -111,12 +114,17 @@ class ControllerDiscrete(Node):
         self.stage = np.array([[robot.position.x, robot.position.z]]).T
         # Update insertion depth (after insertion starts)
         if (self.entry_point.size != 0):
-            self.depth = robot.position.y - self.entry_point.position.y
+            self.depth = robot.position.y - self.entry_point[1,0]
+
+        # Check if insertion depth is final
+        if (self.depth > CONTROL_LENGTH):
+            self.get_logger().info('Reached maximum insertion lenght for control')
 
         # Check if robot reached its goal position (after cmd starts)
-        if (self.robot_idle == False) and (self.cmd.size != 0):
+        elif (self.robot_idle == False) and (self.cmd.size != 0):
             if (np.linalg.norm(self.stage - self.cmd) <= 0.4):
                 self.robot_idle = True 
+                self.get_logger().info('Please, make a small insertion step and hit SPACE')
 
     # Get current tip pose
     def tip_callback(self, msg):
@@ -130,6 +138,8 @@ class ControllerDiscrete(Node):
             entry_point = msg.pose
             self.entry_point = np.array([[entry_point.position.x, entry_point.position.y, entry_point.position.z, \
                                     entry_point.orientation.w, entry_point.orientation.x, entry_point.orientation.y, entry_point.orientation.z]]).T
+            self.robot_idle = True
+            self.get_logger().info('Please, make a small insertion step and hit SPACE')
 
 
     # Get current Jacobian matrix from Estimator node

@@ -1,7 +1,11 @@
-estimator_node:
+estimator:
   ros__parameters:
     alpha: 0.65
 
-controller_node:
+controller:
+  ros__parameters:
+    K: -0.5
+
+controller_discrete:
   ros__parameters:
     K: -0.5

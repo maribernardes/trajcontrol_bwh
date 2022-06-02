@@ -90,6 +90,11 @@ class SmartTemplateManual(Node):
         elif (msg.data == 56): # move up
             cmd[1] = DELTA_MM
 
+        #########################################################
+        # ATTENTION: DELETE AFTER ROBOT FIXED HORIZONTAL MOVEMENT
+        cmd[0] = 0.0
+        #########################################################
+
         # Send command to stage
         self.send_movement_in_counts(float(cmd[0])*MM_2_COUNT,"A")
         # WARNING: Galil channel B inverted, that is why the my_goal is negative

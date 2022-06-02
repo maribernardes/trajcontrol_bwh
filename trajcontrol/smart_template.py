@@ -233,7 +233,13 @@ class SmartTemplate(Node):
 
         # Subtract entry point from goal because robot considers initial position to be (0,0)
         my_goal = goal_handle.request
-        my_goal.x = my_goal.x - self.entry_point[0,0]
+
+        #########################################################
+        # ATTENTION: DELETE AFTER ROBOT FIXED HORIZONTAL MOVEMENT
+        my_goal.x = 0.0
+        #########################################################
+
+        # my_goal.x = my_goal.x - self.entry_point[0,0]
         my_goal.z = my_goal.z - self.entry_point[2,0]
 
         self.get_logger().info("command %f %f" % (my_goal.x,my_goal.z))
